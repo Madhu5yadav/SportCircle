@@ -1,98 +1,119 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useState } from "react";
+import { View, ActivityIndicator, StyleSheet, Image, Text } from "react-native";
+import { useRouter } from "expo-router";
+import { useDispatch } from "react-redux";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { StorageService } from "../services/storage";
+import { setCredentials, logout } from "../redux/authSlice";
+import { COLORS, TYPOGRAPHY } from "../theme/theme";
+import api from "../services/api";
+import { SocketService } from "../services/socket";
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+export default function EntryScreen() {
+  const router = useRouter();
+  const dispatch = useDispatch();
+  const [checking, setChecking] = useState(true);
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        const token = await StorageService.getAccessToken();
+        const refreshToken = await StorageService.getRefreshToken();
+        
+        if (token && refreshToken) {
+          // Attempt to load profile from backend to verify token validity
+          try {
+            const response = await api.get("/profile");
+            const profileData = response.data; // Includes user, wallet, settings
+            
+            // Populate Redux state
+            dispatch(
+              setCredentials({
+                user: profileData.user,
+                token,
+                refreshToken,
+                wallet: profileData.wallet,
+                settings: profileData.settings,
+              })
+            );
+            
+            // Connect Socket.IO
+            SocketService.connect(profileData.user.id, profileData.user.username);
+            
+            // Navigate based on onboarding details completion
+            const hasDetails = !!(profileData.user.first_name && profileData.user.gender);
+            if (hasDetails) {
+              router.replace("/(tabs)/home");
+            } else {
+              router.replace("/personal-details");
+            }
+            return;
+          } catch (apiError) {
+            console.log("Auto-login token validation failed, logging out", apiError);
+            await StorageService.clearAll();
+            dispatch(logout());
+          }
+        }
+        
+        // No valid token, check if walkthrough shown
+        const walkthroughShown = await AsyncStorage.getItem("walkthrough_shown");
+        if (walkthroughShown === "true") {
+          router.replace("/login");
+        } else {
+          router.replace("/walkthrough");
+        }
+      } catch (error) {
+        console.error("Error checking auth status:", error);
+        router.replace("/login");
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    checkAuthStatus();
+  }, []);
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+    <View style={styles.container}>
+      <View style={styles.logoContainer}>
+        {/* Generates a nice logo text or visual using styled components */}
+        <Text style={styles.logoText}>Sport<Text style={styles.logoHighlight}>Circle</Text></Text>
+        <Text style={styles.tagline}>Host. Join. Play. Repeat.</Text>
+      </View>
+      <ActivityIndicator size="large" color={COLORS.primary} style={styles.loader} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+    backgroundColor: COLORS.background,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: 40,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+  logoText: {
+    fontSize: 42,
+    fontFamily: "Poppins_700Bold",
+    color: COLORS.textPrimary,
+    letterSpacing: -1,
   },
-  title: {
-    textAlign: 'center',
+  logoHighlight: {
+    color: COLORS.primary,
   },
-  code: {
-    textTransform: 'uppercase',
+  tagline: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+    letterSpacing: 1,
   },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+  loader: {
+    position: "absolute",
+    bottom: 80,
   },
 });
