@@ -58,16 +58,18 @@ def signup(user_in: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     
     # 4. Trigger OTP send
-    OTPService.generate_otp(db_user.mobile, db)
-    
-    return {"message": "User registered successfully. OTP sent.", "mobile": db_user.mobile}
+    otp_code = OTPService.generate_otp(db_user.mobile, db)
+
+    # No real SMS gateway is configured; OTP is returned directly for dev/testing.
+    return {"message": "User registered successfully. OTP sent.", "mobile": db_user.mobile, "otp": otp_code}
 
 
 @router.post("/send-otp")
 def send_otp(otp_in: OTPSend, db: Session = Depends(get_db)):
     # Verify if user exists (for reset password, etc.) or allow sending OTP for signup
-    OTPService.generate_otp(otp_in.mobile, db)
-    return {"message": "OTP sent successfully."}
+    otp_code = OTPService.generate_otp(otp_in.mobile, db)
+    # No real SMS gateway is configured; OTP is returned directly for dev/testing.
+    return {"message": "OTP sent successfully.", "otp": otp_code}
 
 
 @router.post("/verify-otp")
@@ -166,8 +168,9 @@ def forgot_password(forgot_in: ForgotPasswordRequest, db: Session = Depends(get_
             detail="Mobile number not registered"
         )
         
-    OTPService.generate_otp(user.mobile, db)
-    return {"message": "OTP for password reset sent."}
+    otp_code = OTPService.generate_otp(user.mobile, db)
+    # No real SMS gateway is configured; OTP is returned directly for dev/testing.
+    return {"message": "OTP for password reset sent.", "otp": otp_code}
 
 
 @router.post("/reset-password")
