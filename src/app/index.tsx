@@ -1,18 +1,21 @@
 import { useEffect, useState } from "react";
-import { View, ActivityIndicator, StyleSheet, Image, Text } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { useDispatch } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import LottieView from "lottie-react-native";
+
 import { StorageService } from "../services/storage";
 import { setCredentials, logout } from "../redux/authSlice";
-import { COLORS, TYPOGRAPHY } from "../theme/theme";
+import { COLORS } from "../theme/theme";
 import api from "../services/api";
 import { SocketService } from "../services/socket";
 
 export default function EntryScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
-  const [checking, setChecking] = useState(true);
+  const [targetRoute, setTargetRoute] = useState<string | null>(null);
+  const [animationFinished, setAnimationFinished] = useState(false);
 
   useEffect(() => {
     const checkAuthStatus = async () => {
@@ -21,12 +24,10 @@ export default function EntryScreen() {
         const refreshToken = await StorageService.getRefreshToken();
         
         if (token && refreshToken) {
-          // Attempt to load profile from backend to verify token validity
           try {
             const response = await api.get("/profile");
-            const profileData = response.data; // Includes user, wallet, settings
+            const profileData = response.data;
             
-            // Populate Redux state
             dispatch(
               setCredentials({
                 user: profileData.user,
@@ -37,15 +38,13 @@ export default function EntryScreen() {
               })
             );
             
-            // Connect Socket.IO
             SocketService.connect(profileData.user.id, profileData.user.username);
             
-            // Navigate based on onboarding details completion
             const hasDetails = !!(profileData.user.first_name && profileData.user.gender);
             if (hasDetails) {
-              router.replace("/(tabs)/home");
+              setTargetRoute("/(tabs)/home");
             } else {
-              router.replace("/personal-details");
+              setTargetRoute("/personal-details");
             }
             return;
           } catch (apiError) {
@@ -55,32 +54,36 @@ export default function EntryScreen() {
           }
         }
         
-        // No valid token, check if walkthrough shown
         const walkthroughShown = await AsyncStorage.getItem("walkthrough_shown");
         if (walkthroughShown === "true") {
-          router.replace("/login");
+          setTargetRoute("/login");
         } else {
-          router.replace("/walkthrough");
+          setTargetRoute("/walkthrough");
         }
       } catch (error) {
         console.error("Error checking auth status:", error);
-        router.replace("/login");
-      } finally {
-        setChecking(false);
+        setTargetRoute("/login");
       }
     };
 
     checkAuthStatus();
   }, []);
 
+  useEffect(() => {
+    if (animationFinished && targetRoute) {
+      router.replace(targetRoute as any);
+    }
+  }, [animationFinished, targetRoute]);
+
   return (
     <View style={styles.container}>
-      <View style={styles.logoContainer}>
-        {/* Generates a nice logo text or visual using styled components */}
-        <Text style={styles.logoText}>Sport<Text style={styles.logoHighlight}>Circle</Text></Text>
-        <Text style={styles.tagline}>Host. Join. Play. Repeat.</Text>
-      </View>
-      <ActivityIndicator size="large" color={COLORS.primary} style={styles.loader} />
+      <LottieView
+        source={require("@/assets/Logo.json")}
+        autoPlay
+        loop={false}
+        onAnimationFinish={() => setAnimationFinished(true)}
+        style={styles.animation}
+      />
     </View>
   );
 }
@@ -88,32 +91,12 @@ export default function EntryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
   },
-  logoContainer: {
-    alignItems: "center",
-    marginBottom: 40,
-  },
-  logoText: {
-    fontSize: 42,
-    fontFamily: "Poppins_700Bold",
-    color: COLORS.textPrimary,
-    letterSpacing: -1,
-  },
-  logoHighlight: {
-    color: COLORS.primary,
-  },
-  tagline: {
-    fontFamily: "Poppins_500Medium",
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-    letterSpacing: 1,
-  },
-  loader: {
-    position: "absolute",
-    bottom: 80,
+  animation: {
+    width: 280,
+    height: 280,
   },
 });
