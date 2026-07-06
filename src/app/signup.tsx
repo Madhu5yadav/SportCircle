@@ -76,7 +76,10 @@ export default function SignupScreen() {
         [
           { 
             text: "Verify Now", 
-            onPress: () => router.push({ pathname: "/otp", params: { mobile: data.mobile } }) 
+            onPress: () => router.push({ 
+              pathname: "/otp", 
+              params: { mobile: data.mobile, simulatedOtp: response.data.otp } 
+            }) 
           }
         ]
       );

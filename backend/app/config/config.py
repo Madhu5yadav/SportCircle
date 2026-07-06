@@ -1,7 +1,9 @@
 import os
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     PROJECT_NAME: str = "SportCircle"
     PROJECT_VERSION: str = "1.0.0"
     
@@ -20,7 +22,9 @@ class Settings(BaseSettings):
     # Socket.IO configuration
     SOCKET_CORS_ALLOWED_ORIGINS: str = "*"
 
-    class Config:
-        env_file = ".env"
+    # Twilio SMS Settings
+    TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    TWILIO_PHONE_NUMBER: str = os.getenv("TWILIO_PHONE_NUMBER", "")
 
 settings = Settings()

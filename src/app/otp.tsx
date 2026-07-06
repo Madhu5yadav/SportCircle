@@ -24,12 +24,19 @@ import { SocketService } from "../services/socket";
 export default function OTPScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
-  const { mobile } = useLocalSearchParams<{ mobile: string }>();
+  const { mobile, simulatedOtp } = useLocalSearchParams<{ mobile: string; simulatedOtp?: string }>();
 
   const [otpCode, setOtpCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [timer, setTimer] = useState(30);
+
+  // Pre-fill simulated OTP in dev/testing mode
+  useEffect(() => {
+    if (simulatedOtp) {
+      setOtpCode(simulatedOtp);
+    }
+  }, [simulatedOtp]);
 
   // Countdown timer for resending OTP
   useEffect(() => {
@@ -103,8 +110,18 @@ export default function OTPScreen() {
   const handleResend = async () => {
     setResending(true);
     try {
-      await axios.post(`${CONFIG.API_URL}/send-otp`, { mobile });
-      Alert.alert("OTP Sent", "A new OTP code has been sent to your mobile number.");
+      const response = await axios.post(`${CONFIG.API_URL}/send-otp`, { mobile });
+      const newOtp = response.data.otp;
+      
+      if (newOtp) {
+        setOtpCode(newOtp);
+        Alert.alert(
+          "OTP Sent",
+          `A new OTP code has been simulated for dev/testing.\nCode: ${newOtp} (Autofilled)`
+        );
+      } else {
+        Alert.alert("OTP Sent", "A new OTP code has been sent to your mobile number.");
+      }
       setTimer(30);
     } catch (error: any) {
       Alert.alert("Failed to Send", "Could not resend OTP. Please try again.");
@@ -144,6 +161,12 @@ export default function OTPScreen() {
               textAlign="center"
               autoFocus
             />
+
+            {simulatedOtp && (
+              <Text style={styles.devModeText}>
+                ⚠️ Dev Mode: Simulated OTP is <Text style={styles.devModeCode}>{simulatedOtp}</Text> (Autofilled)
+              </Text>
+            )}
 
             <TouchableOpacity 
               style={[styles.btn, loading ? styles.btnDisabled : null]}
@@ -265,5 +288,21 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 14,
     color: COLORS.primary,
+  },
+  devModeText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: "#e65100",
+    backgroundColor: "#fff3e0",
+    padding: 10,
+    borderRadius: 8,
+    textAlign: "center",
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#ffe0b2",
+  },
+  devModeCode: {
+    fontFamily: "Poppins_700Bold",
+    color: "#e65100",
   },
 });

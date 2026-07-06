@@ -2,8 +2,13 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../theme/theme";
 import { Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = insets.bottom > 0 ? insets.bottom : 10;
+  const tabHeight = 54 + bottomPadding;
+
   return (
     <Tabs
       screenOptions={{
@@ -13,8 +18,8 @@ export default function TabsLayout() {
           backgroundColor: COLORS.surface,
           borderTopColor: COLORS.border,
           borderTopWidth: 1.5,
-          height: Platform.OS === "ios" ? 88 : 64,
-          paddingBottom: Platform.OS === "ios" ? 28 : 10,
+          height: tabHeight,
+          paddingBottom: bottomPadding,
           paddingTop: 10,
           elevation: 8,
           shadowColor: COLORS.shadow,
@@ -70,7 +75,7 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="chat"
+        name="chat/index"
         options={{
           title: "Chat",
           headerTitle: "My Group Chats",
@@ -83,8 +88,15 @@ export default function TabsLayout() {
           ),
         }}
       />
+      {/* Hide dynamic chat room from bottom tab navigation */}
       <Tabs.Screen
-        name="booking"
+        name="chat/[roomId]"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="booking/index"
         options={{
           title: "Booking",
           headerTitle: "Discover Turfs",

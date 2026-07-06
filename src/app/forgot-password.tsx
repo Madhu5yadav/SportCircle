@@ -31,7 +31,7 @@ export default function ForgotPasswordScreen() {
 
     setLoading(true);
     try {
-      await axios.post(`${CONFIG.API_URL}/forgot-password`, {
+      const response = await axios.post(`${CONFIG.API_URL}/forgot-password`, {
         mobile: mobile.trim(),
       });
 
@@ -44,7 +44,7 @@ export default function ForgotPasswordScreen() {
             onPress: () => {
               router.push({
                 pathname: "/reset-password",
-                params: { mobile: mobile.trim() }
+                params: { mobile: mobile.trim(), simulatedOtp: response.data.otp }
               });
             }
           }

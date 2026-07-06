@@ -20,7 +20,7 @@ import { CONFIG } from "../constants/config";
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
-  const { mobile } = useLocalSearchParams<{ mobile: string }>();
+  const { mobile, simulatedOtp } = useLocalSearchParams<{ mobile: string; simulatedOtp?: string }>();
 
   const [otpCode, setOtpCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -28,6 +28,13 @@ export default function ResetPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [secureText, setSecureText] = useState(true);
   const [secureConfirmText, setSecureConfirmText] = useState(true);
+
+  // Pre-fill simulated OTP in dev/testing mode
+  React.useEffect(() => {
+    if (simulatedOtp) {
+      setOtpCode(simulatedOtp);
+    }
+  }, [simulatedOtp]);
 
   const handleSubmit = async () => {
     if (otpCode.length !== 6) {
@@ -117,6 +124,11 @@ export default function ResetPasswordScreen() {
                   onChangeText={setOtpCode}
                 />
               </View>
+              {simulatedOtp && (
+                <Text style={styles.devModeText}>
+                  ⚠️ Dev Mode: Simulated OTP is <Text style={styles.devModeCode}>{simulatedOtp}</Text> (Autofilled)
+                </Text>
+              )}
             </View>
 
             {/* New Password */}
@@ -273,5 +285,21 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 16,
     color: COLORS.surface,
+  },
+  devModeText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: "#e65100",
+    backgroundColor: "#fff3e0",
+    padding: 8,
+    borderRadius: 8,
+    textAlign: "center",
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#ffe0b2",
+  },
+  devModeCode: {
+    fontFamily: "Poppins_700Bold",
+    color: "#e65100",
   },
 });
