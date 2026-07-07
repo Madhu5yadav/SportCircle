@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from app.database.db import get_db
 from app.models.models import User, Friend, Favorite
-from app.schemas.schemas import FriendResponse, FriendRequest, FriendRequestAction
+from app.schemas.schemas import FriendResponse, FriendRequest, FriendRequestAction, UserSearchResponse
 from app.middleware.auth import get_current_user
 from app.services.notification_service import NotificationService
 
@@ -238,3 +238,108 @@ def get_favorites(
             ))
             
     return fav_list
+
+
+@router.get("/users/search", response_model=List[UserSearchResponse])
+def search_users(
+    query: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not query.strip():
+        return []
+        
+    # Search all users except current_user
+    users = db.query(User).filter(
+        and_(
+            User.id != current_user.id,
+            or_(
+                User.username.like(f"%{query}%"),
+                User.first_name.like(f"%{query}%"),
+                User.last_name.like(f"%{query}%")
+            )
+        )
+    ).limit(30).all()
+    
+    results = []
+    for u in users:
+        # Check friendship status
+        friendship = db.query(Friend).filter(
+            or_(
+                and_(Friend.user_id == current_user.id, Friend.friend_id == u.id),
+                and_(Friend.user_id == u.id, Friend.friend_id == current_user.id)
+            )
+        ).first()
+        
+        status_val = "none"
+        friendship_id = None
+        if friendship:
+            friendship_id = friendship.id
+            if friendship.status == "accepted":
+                status_val = "accepted"
+            elif friendship.status == "pending":
+                if friendship.user_id == current_user.id:
+                    status_val = "pending_sent"
+                else:
+                    status_val = "pending_received"
+                    
+        # Compute mutual friends
+        # Find friends of current_user
+        my_friend_ids = db.query(Friend.user_id).filter(
+            and_(Friend.friend_id == current_user.id, Friend.status == "accepted")
+        ).union(
+            db.query(Friend.friend_id).filter(
+                and_(Friend.user_id == current_user.id, Friend.status == "accepted")
+            )
+        ).all()
+        my_friend_ids_set = {r[0] for r in my_friend_ids}
+        
+        # Find friends of user u
+        u_friend_ids = db.query(Friend.user_id).filter(
+            and_(Friend.friend_id == u.id, Friend.status == "accepted")
+        ).union(
+            db.query(Friend.friend_id).filter(
+                and_(Friend.user_id == u.id, Friend.status == "accepted")
+            )
+        ).all()
+        u_friend_ids_set = {r[0] for r in u_friend_ids}
+        
+        mutual_count = len(my_friend_ids_set.intersection(u_friend_ids_set))
+        
+        results.append(UserSearchResponse(
+            id=u.id,
+            username=u.username,
+            first_name=u.first_name,
+            last_name=u.last_name,
+            profile_pic=u.profile_pic,
+            friendship_status=status_val,
+            friendship_id=friendship_id,
+            mutual_friends_count=mutual_count
+        ))
+        
+    return results
+
+
+@router.delete("/friend/remove/{friend_id}")
+def remove_friend_by_id(
+    friend_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    friendship = db.query(Friend).filter(
+        or_(
+            and_(Friend.user_id == current_user.id, Friend.friend_id == friend_id),
+            and_(Friend.user_id == friend_id, Friend.friend_id == current_user.id)
+        )
+    ).first()
+    
+    if not friendship:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Friendship not found"
+        )
+        
+    db.delete(friendship)
+    db.commit()
+    return {"message": "Friend removed successfully"}
+

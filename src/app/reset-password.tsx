@@ -68,7 +68,7 @@ export default function ResetPasswordScreen() {
         mobile,
         otp_code: otpCode.trim(),
         new_password: newPassword,
-      });
+      }, { timeout: 10000 });
 
       Alert.alert(
         "Success",

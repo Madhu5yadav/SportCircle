@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { 
   View, 
   Text, 
@@ -47,6 +47,21 @@ export default function PreferredSportsScreen() {
 
   const [selectedSports, setSelectedSports] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchProfileAndSports = async () => {
+      try {
+        const response = await api.get("/profile");
+        const profileData = response.data;
+        if (profileData.preferred_sports && profileData.preferred_sports.length > 0) {
+          setSelectedSports(profileData.preferred_sports);
+        }
+      } catch (error) {
+        console.log("Error loading preferred sports:", error);
+      }
+    };
+    fetchProfileAndSports();
+  }, []);
 
   const handleToggleSport = (id: string) => {
     if (selectedSports.includes(id)) {

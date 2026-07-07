@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from typing import List
+import os
+import shutil
+import uuid
 
 from app.database.db import get_db
 from app.models.models import User, PreferredSport, Wallet, Settings
@@ -120,3 +123,38 @@ def update_settings(
     
     db.commit()
     return {"message": "Notification preferences updated successfully"}
+
+
+@router.post("/profile/upload-photo")
+def upload_profile_photo(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an image"
+        )
+    
+    uploads_dir = os.path.join(os.getcwd(), "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+    
+    ext = os.path.splitext(file.filename)[1] or ".jpg"
+    filename = f"user_{current_user.id}_{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(uploads_dir, filename)
+    
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    host = request.headers.get("host", "localhost:8000")
+    scheme = request.url.scheme
+    base_url = f"{scheme}://{host}"
+    url = f"{base_url}/uploads/{filename}"
+    
+    current_user.profile_pic = url
+    db.commit()
+    db.refresh(current_user)
+    
+    return {"message": "Profile photo uploaded successfully.", "url": url}

@@ -33,7 +33,7 @@ export default function ForgotPasswordScreen() {
     try {
       const response = await axios.post(`${CONFIG.API_URL}/forgot-password`, {
         mobile: mobile.trim(),
-      });
+      }, { timeout: 10000 });
 
       Alert.alert(
         "OTP Code Sent",

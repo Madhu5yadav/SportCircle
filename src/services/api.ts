@@ -74,7 +74,7 @@ api.interceptors.response.use(
         // Call token refresh API
         const response = await axios.post(`${CONFIG.API_URL}/refresh-token`, {
           refresh_token: refreshToken,
-        });
+        }, { timeout: 10000 });
 
         const { access_token, refresh_token, user_id, username } = response.data;
 

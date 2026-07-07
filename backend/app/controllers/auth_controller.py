@@ -210,6 +210,8 @@ def save_personal_details(
     current_user.gender = details.gender
     current_user.latitude = details.latitude
     current_user.longitude = details.longitude
+    if details.profile_pic is not None:
+        current_user.profile_pic = details.profile_pic
     
     # Store preferred playing time in about column as JSON or serialise it
     # We will use about/custom columns. Let's serialize playing times into user settings or about text

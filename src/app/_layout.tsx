@@ -64,6 +64,8 @@ export default function RootLayout() {
           
           {/* Standalone Screens */}
           <Stack.Screen name="friends" options={{ title: "Squad & Friends", headerBackTitle: "Back" }} />
+          <Stack.Screen name="search-users" options={{ title: "Search Users", headerBackTitle: "Back" }} />
+          <Stack.Screen name="pending-requests" options={{ title: "Pending Requests", headerBackTitle: "Back" }} />
           <Stack.Screen name="host-game" options={{ title: "Host a Game", headerBackTitle: "Back" }} />
           <Stack.Screen name="join-game" options={{ title: "Discover & Join Games", headerBackTitle: "Back" }} />
         </Stack>

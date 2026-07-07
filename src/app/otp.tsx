@@ -60,7 +60,7 @@ export default function OTPScreen() {
       const response = await axios.post(`${CONFIG.API_URL}/verify-otp`, {
         mobile,
         otp_code: otpCode,
-      });
+      }, { timeout: 10000 });
 
       const { tokens, verified } = response.data;
       if (verified && tokens) {
@@ -70,7 +70,8 @@ export default function OTPScreen() {
 
         // Fetch User profile to populate details
         const profileRes = await axios.get(`${CONFIG.API_URL}/profile`, {
-          headers: { Authorization: `Bearer ${tokens.access_token}` }
+          headers: { Authorization: `Bearer ${tokens.access_token}` },
+          timeout: 10000
         });
 
         const profileData = profileRes.data;
@@ -110,7 +111,7 @@ export default function OTPScreen() {
   const handleResend = async () => {
     setResending(true);
     try {
-      const response = await axios.post(`${CONFIG.API_URL}/send-otp`, { mobile });
+      const response = await axios.post(`${CONFIG.API_URL}/send-otp`, { mobile }, { timeout: 10000 });
       const newOtp = response.data.otp;
       
       if (newOtp) {

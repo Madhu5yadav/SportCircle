@@ -55,6 +55,7 @@ class PersonalDetailsCreate(BaseModel):
     playing_time: List[str]  # e.g., ["Morning", "Evening"]
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    profile_pic: Optional[str] = None
 
 class PreferredSportsCreate(BaseModel):
     sports: List[str]
@@ -167,6 +168,18 @@ class SquadResponse(BaseModel):
 
 class SquadMemberAdd(BaseModel):
     user_id: int
+
+class UserSearchResponse(BaseModel):
+    id: int
+    username: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    profile_pic: Optional[str] = None
+    friendship_status: str  # none, pending_sent, pending_received, accepted
+    friendship_id: Optional[int] = None
+    mutual_friends_count: int
+    class Config:
+        from_attributes = True
 
 # --- Game & Participant Schemas ---
 class GameCreate(BaseModel):

@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 import socketio
 import uvicorn
 
@@ -32,6 +34,10 @@ app = FastAPI(
     version=settings.PROJECT_VERSION,
     description="Full-stack backend engine for SportCircle location-based community platform"
 )
+
+# Create uploads directory if it doesn't exist
+os.makedirs("uploads", exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # 3. Configure CORS Middlewares
 app.add_middleware(

@@ -10,11 +10,14 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Image
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useDispatch } from "react-redux";
 import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from "../theme/theme";
 import { Ionicons } from "@expo/vector-icons";
 import api from "../services/api";
@@ -35,16 +38,56 @@ export default function PersonalDetailsScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [dob, setDob] = useState(""); // YYYY-MM-DD
+  const [dobDate, setDobDate] = useState<Date>(new Date(2000, 0, 1));
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [gender, setGender] = useState("");
   const [selectedTimes, setSelectedTimes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   
   // Location States
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<"idle" | "requesting" | "success" | "failed">("idle");
 
   useEffect(() => {
-    requestLocation();
+    const fetchProfileDetails = async () => {
+      try {
+        const response = await api.get("/profile");
+        const profileData = response.data;
+        const u = profileData.user;
+        let hasLocation = false;
+        if (u) {
+          if (u.first_name) setFirstName(u.first_name);
+          if (u.last_name) setLastName(u.last_name);
+          if (u.dob) {
+            setDob(u.dob);
+            // Parse the saved date string into a Date object for the picker
+            const parsed = new Date(u.dob + "T00:00:00");
+            if (!isNaN(parsed.getTime())) setDobDate(parsed);
+          }
+          if (u.gender) setGender(u.gender);
+          if (u.profile_pic) setProfileImage(u.profile_pic);
+          if (u.latitude && u.longitude) {
+            setCoords({ latitude: u.latitude, longitude: u.longitude });
+            setLocationStatus("success");
+            hasLocation = true;
+          }
+        }
+        if (profileData.playing_time && profileData.playing_time.length > 0) {
+          setSelectedTimes(profileData.playing_time);
+        }
+        
+        if (!hasLocation) {
+          requestLocation();
+        }
+      } catch (error) {
+        console.log("Error fetching profile details on mount:", error);
+        requestLocation();
+      }
+    };
+
+    fetchProfileDetails();
   }, []);
 
   const requestLocation = async () => {
@@ -80,21 +123,111 @@ export default function PersonalDetailsScreen() {
     }
   };
 
+  const pickImage = async (source: "camera" | "gallery") => {
+    try {
+      let result: ImagePicker.ImagePickerResult;
+
+      if (source === "camera") {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "Camera permission is needed to take a photo.");
+          return;
+        }
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "Gallery permission is needed to pick a photo.");
+          return;
+        }
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+      }
+
+      if (!result.canceled && result.assets[0]) {
+        setProfileImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.log("Error picking image:", error);
+      Alert.alert("Error", "Failed to pick image. Please try again.");
+    }
+  };
+
+  const showImagePickerOptions = () => {
+    Alert.alert(
+      "Profile Picture",
+      "Choose how to set your profile picture",
+      [
+        { text: "📷  Take Photo", onPress: () => pickImage("camera") },
+        { text: "🖼️  Choose from Gallery", onPress: () => pickImage("gallery") },
+        ...(profileImage ? [{ text: "🗑️  Remove Photo", onPress: () => setProfileImage(null), style: "destructive" as const }] : []),
+        { text: "Cancel", style: "cancel" as const },
+      ]
+    );
+  };
+
+  const uploadProfileImage = async (): Promise<string | null> => {
+    if (!profileImage || profileImage.startsWith("http")) {
+      // Already uploaded or no image — skip upload
+      return profileImage;
+    }
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      const filename = profileImage.split("/").pop() || "profile.jpg";
+      const match = /\.([\w]+)$/.exec(filename);
+      const ext = match ? match[1] : "jpg";
+      const mimeType = `image/${ext === "jpg" ? "jpeg" : ext}`;
+
+      formData.append("file", {
+        uri: profileImage,
+        name: filename,
+        type: mimeType,
+      } as any);
+
+      const response = await api.post("/profile/upload-photo", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      return response.data.url;
+    } catch (error) {
+      console.log("Error uploading profile image:", error);
+      return null;
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!firstName.trim() || !lastName.trim() || !dob.trim() || !gender || selectedTimes.length === 0) {
       Alert.alert("Incomplete Details", "Please fill in all fields and select at least one preferred playing time.");
       return;
     }
 
-    // Basic date format validation
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(dob)) {
-      Alert.alert("Invalid Date Format", "Please enter date of birth in YYYY-MM-DD format.");
+    // Date is always valid when using the picker, but check it's not empty
+    if (!dob) {
+      Alert.alert("Missing Date", "Please select your date of birth.");
       return;
     }
 
     setLoading(true);
     try {
+      // Upload profile image first if a new local image was picked
+      let uploadedUrl = profileImage;
+      if (profileImage && !profileImage.startsWith("http")) {
+        uploadedUrl = await uploadProfileImage();
+      }
+
       await api.put("/profile/personal-details", {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
@@ -103,6 +236,7 @@ export default function PersonalDetailsScreen() {
         playing_time: selectedTimes,
         latitude: coords?.latitude,
         longitude: coords?.longitude,
+        profile_pic: uploadedUrl || undefined,
       });
 
       // Update local Redux store user profile
@@ -114,7 +248,8 @@ export default function PersonalDetailsScreen() {
           gender: gender,
           latitude: coords?.latitude || undefined,
           longitude: coords?.longitude || undefined,
-          about: `Playing: ${selectedTimes.join(",")}`
+          about: `Playing: ${selectedTimes.join(",")}`,
+          profile_pic: uploadedUrl || undefined,
         })
       );
 
@@ -135,6 +270,28 @@ export default function PersonalDetailsScreen() {
       >
         <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
           
+          {/* Profile Picture Picker */}
+          <View style={styles.avatarSection}>
+            <TouchableOpacity style={styles.avatarWrapper} onPress={showImagePickerOptions} activeOpacity={0.8}>
+              {profileImage ? (
+                <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="person" size={48} color={COLORS.border} />
+                </View>
+              )}
+              <View style={styles.avatarBadge}>
+                <Ionicons name="camera" size={14} color={COLORS.surface} />
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.avatarHint}>
+              {profileImage ? "Tap to change photo" : "Add a profile photo"}
+            </Text>
+            {uploadingImage && (
+              <ActivityIndicator size="small" color={COLORS.primary} style={{ marginTop: 6 }} />
+            )}
+          </View>
+
           <Text style={styles.sectionTitle}>Tell Us About Yourself</Text>
           <Text style={styles.sectionSubtitle}>Help us customize your SportCircle feed!</Text>
 
@@ -194,17 +351,51 @@ export default function PersonalDetailsScreen() {
 
           {/* Date of Birth */}
           <View style={styles.inputWrapper}>
-            <Text style={styles.label}>Date of Birth (YYYY-MM-DD)</Text>
-            <View style={styles.inputWithIcon}>
-              <TextInput
-                style={[styles.input, { flex: 1, borderWidth: 0, paddingLeft: 0 }]}
-                placeholder="YYYY-MM-DD (e.g. 1998-05-15)"
-                placeholderTextColor={COLORS.textSecondary}
-                value={dob}
-                onChangeText={setDob}
-              />
-              <Ionicons name="calendar-outline" size={20} color={COLORS.textSecondary} />
-            </View>
+            <Text style={styles.label}>Date of Birth</Text>
+            <TouchableOpacity
+              style={styles.datePickerField}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar-outline" size={20} color={dob ? COLORS.primary : COLORS.textSecondary} style={{ marginRight: 10 }} />
+              <Text style={[styles.datePickerText, !dob && styles.datePickerPlaceholder]}>
+                {dob
+                  ? dobDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+                  : "Select your date of birth"}
+              </Text>
+              <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+            {showDatePicker && (
+              <View style={styles.datePickerContainer}>
+                <DateTimePicker
+                  value={dobDate}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  maximumDate={new Date()}
+                  minimumDate={new Date(1950, 0, 1)}
+                  onChange={(event: DateTimePickerEvent, selectedDate?: Date) => {
+                    if (Platform.OS === "android") {
+                      setShowDatePicker(false);
+                    }
+                    if (selectedDate) {
+                      setDobDate(selectedDate);
+                      const yyyy = selectedDate.getFullYear();
+                      const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
+                      const dd = String(selectedDate.getDate()).padStart(2, "0");
+                      setDob(`${yyyy}-${mm}-${dd}`);
+                    }
+                  }}
+                />
+                {Platform.OS === "ios" && (
+                  <TouchableOpacity
+                    style={styles.datePickerDoneBtn}
+                    onPress={() => setShowDatePicker(false)}
+                  >
+                    <Text style={styles.datePickerDoneText}>Done</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
 
           {/* Gender */}
@@ -297,6 +488,54 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.xl,
   },
+  avatarSection: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  avatarWrapper: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    position: "relative",
+  },
+  avatarImage: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 3,
+    borderColor: COLORS.primary,
+  },
+  avatarPlaceholder: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: COLORS.surface,
+    borderWidth: 2.5,
+    borderColor: COLORS.border,
+    borderStyle: "dashed",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarBadge: {
+    position: "absolute",
+    bottom: 2,
+    right: 2,
+    backgroundColor: COLORS.primary,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2.5,
+    borderColor: COLORS.surface,
+    ...SHADOWS.medium,
+  },
+  avatarHint: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 10,
+  },
   sectionTitle: {
     fontFamily: "Poppins_700Bold",
     fontSize: 24,
@@ -387,7 +626,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     ...SHADOWS.soft,
   },
-  inputWithIcon: {
+  datePickerField: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.surface,
@@ -397,6 +636,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     height: 54,
     ...SHADOWS.soft,
+  },
+  datePickerText: {
+    flex: 1,
+    fontFamily: "Poppins_400Regular",
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+  datePickerPlaceholder: {
+    color: COLORS.textSecondary,
+  },
+  datePickerContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    marginTop: 8,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    overflow: "hidden",
+    ...SHADOWS.soft,
+  },
+  datePickerDoneBtn: {
+    alignItems: "center",
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  datePickerDoneText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: COLORS.primary,
   },
   genderContainer: {
     flexDirection: "row",

@@ -68,7 +68,7 @@ export default function SignupScreen() {
         username: data.username.trim(),
         mobile: data.mobile.trim(),
         password: data.password,
-      });
+      }, { timeout: 10000 });
 
       Alert.alert(
         "Verification Required", 

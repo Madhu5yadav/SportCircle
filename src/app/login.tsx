@@ -43,7 +43,7 @@ export default function LoginScreen() {
       const response = await axios.post(`${CONFIG.API_URL}/login`, {
         username_or_mobile: usernameOrMobile.trim(),
         password: password,
-      });
+      }, { timeout: 10000 });
 
       const { access_token, refresh_token } = response.data;
 
@@ -53,7 +53,8 @@ export default function LoginScreen() {
 
       // 3. Fetch User profile details
       const profileRes = await axios.get(`${CONFIG.API_URL}/profile`, {
-        headers: { Authorization: `Bearer ${access_token}` }
+        headers: { Authorization: `Bearer ${access_token}` },
+        timeout: 10000
       });
 
       const profileData = profileRes.data;

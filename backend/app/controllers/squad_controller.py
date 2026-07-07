@@ -246,3 +246,96 @@ def get_squad_details(squad_id: int, db: Session) -> SquadResponse:
         created_at=squad.created_at,
         members=members_list
     )
+
+
+@router.put("/squad/make-leader/{squad_id}/{user_id}")
+def make_squad_leader(
+    squad_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    squad = db.query(Squad).filter(Squad.id == squad_id).first()
+    if not squad:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Squad not found"
+        )
+        
+    # Verify current_user is the leader
+    caller_member = db.query(SquadMember).filter(
+        SquadMember.squad_id == squad_id,
+        SquadMember.user_id == current_user.id
+    ).first()
+    
+    if not caller_member or caller_member.role != "leader":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the squad leader can transfer leadership"
+        )
+        
+    # Verify target user is in the squad
+    target_member = db.query(SquadMember).filter(
+        SquadMember.squad_id == squad_id,
+        SquadMember.user_id == user_id
+    ).first()
+    
+    if not target_member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target user is not a member of the squad"
+        )
+        
+    # Transfer leadership
+    caller_member.role = "member"
+    target_member.role = "leader"
+    squad.created_by = user_id
+    
+    db.commit()
+    
+    # Notify target
+    NotificationService.create_notification(
+        user_id=user_id,
+        title="Promoted to Leader",
+        message=f"You have been promoted to leader of squad '{squad.name}' by {current_user.username}!",
+        notif_type="system",
+        db=db
+    )
+    
+    return {"message": "Leadership transferred successfully"}
+
+
+@router.post("/squad/remove-all/{squad_id}")
+def remove_all_members(
+    squad_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    squad = db.query(Squad).filter(Squad.id == squad_id).first()
+    if not squad:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Squad not found"
+        )
+        
+    # Verify caller is leader
+    caller_member = db.query(SquadMember).filter(
+        SquadMember.squad_id == squad_id,
+        SquadMember.user_id == current_user.id
+    ).first()
+    
+    if not caller_member or caller_member.role != "leader":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the squad leader can remove all members"
+        )
+        
+    # Delete all members except the leader
+    db.query(SquadMember).filter(
+        SquadMember.squad_id == squad_id,
+        SquadMember.user_id != current_user.id
+    ).delete()
+    
+    db.commit()
+    return {"message": "All squad members removed successfully"}
+

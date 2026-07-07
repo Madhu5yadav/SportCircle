@@ -17,7 +17,7 @@ class User(Base):
     latitude = Column(Double, default=None)
     longitude = Column(Double, default=None)
     about = Column(Text, default=None)
-    profile_pic = Column(String(255), default=None)
+    profile_pic = Column(Text, default=None)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
