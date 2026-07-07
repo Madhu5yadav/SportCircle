@@ -1,9 +1,9 @@
-import { useState, useRef } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Image } from "react-native";
-import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { COLORS, SPACING, SHADOWS } from "../theme/theme";
+import { useRouter } from "expo-router";
+import { useRef, useState } from "react";
+import { Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { COLORS, SHADOWS, SPACING } from "../theme/theme";
 
 const { width, height } = Dimensions.get("window");
 
@@ -62,8 +62,8 @@ export default function WalkthroughScreen() {
     <View style={styles.container}>
       {/* Skip Button (hidden on last slide) */}
       {currentSlide < SLIDES.length - 1 && (
-        <TouchableOpacity 
-          style={[styles.skipBtn, { top: insets.top > 0 ? insets.top + 10 : 20 }]} 
+        <TouchableOpacity
+          style={[styles.skipBtn, { top: insets.top > 0 ? insets.top + 10 : 20 }]}
           onPress={handleFinish}
           activeOpacity={0.8}
         >
@@ -113,8 +113,8 @@ export default function WalkthroughScreen() {
         </View>
 
         {/* Next/Continue Button */}
-        <TouchableOpacity 
-          style={styles.btn} 
+        <TouchableOpacity
+          style={styles.btn}
           onPress={handleNext}
           activeOpacity={0.9}
         >
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     right: 20,
     zIndex: 10,
     backgroundColor: "#C8DDFF",
-    borderRadius: 20,
+    borderRadius: 16,
     paddingVertical: 8,
     paddingHorizontal: 24,
     elevation: 4,
@@ -147,8 +147,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   skipText: {
-    fontFamily: "Poppins_700Bold",
-    fontSize: 15,
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 16,
     color: "#1A1A1A",
   },
   slidesContainer: {
