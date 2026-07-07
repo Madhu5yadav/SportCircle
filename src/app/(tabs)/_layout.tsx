@@ -1,13 +1,17 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../theme/theme";
-import { Platform } from "react-native";
+import { Platform, Image, View, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSelector } from "react-redux";
+import { RootState } from "../../redux/store";
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const bottomPadding = insets.bottom > 0 ? insets.bottom : 10;
   const tabHeight = 54 + bottomPadding;
+  const user = useSelector((state: RootState) => state.auth.user);
+  const profilePic = user?.profile_pic;
 
   return (
     <Tabs
@@ -114,15 +118,51 @@ export default function TabsLayout() {
         options={{
           title: "Profile",
           headerTitle: "My Profile",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? "person" : "person-outline"} 
-              size={24} 
-              color={color} 
-            />
-          ),
+          tabBarIcon: ({ color, focused }) => {
+            if (profilePic) {
+              return (
+                <View style={[
+                  styles.profileIconContainer, 
+                  focused && styles.profileIconContainerActive
+                ]}>
+                  <Image 
+                    source={{ uri: profilePic }} 
+                    style={styles.profileIcon} 
+                  />
+                </View>
+              );
+            }
+            return (
+              <Ionicons 
+                name={focused ? "person" : "person-outline"} 
+                size={24} 
+                color={color} 
+              />
+            );
+          },
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  profileIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  profileIconContainerActive: {
+    borderColor: COLORS.primary,
+  },
+  profileIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+});

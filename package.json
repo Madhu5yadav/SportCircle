@@ -45,14 +45,16 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
+    "concurrently": "^10.0.3",
     "typescript": "~5.9.2"
   },
   "scripts": {
-    "start": "expo start",
+    "start": "concurrently \"npm run backend\" \"expo start\"",
+    "backend": "cd backend && .venv\\Scripts\\python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web",
+    "android": "concurrently \"npm run backend\" \"expo start --android\"",
+    "ios": "concurrently \"npm run backend\" \"expo start --ios\"",
+    "web": "concurrently \"npm run backend\" \"expo start --web\"",
     "lint": "expo lint"
   },
   "private": true
