@@ -10,7 +10,8 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Modal
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useDispatch } from "react-redux";
@@ -30,6 +31,88 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [secureText, setSecureText] = useState(true);
+
+  // Forgot password overlay modal states
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
+  const [modalMode, setModalMode] = useState<"select" | "mobile">("select");
+  const [modalCredential, setModalCredential] = useState("");
+  const [sendingOtp, setSendingOtp] = useState(false);
+
+  const handleForgotPasswordPress = () => {
+    // Prefill with whatever they typed in the login username/mobile field
+    setModalCredential(usernameOrMobile.trim());
+    setModalMode("select");
+    setShowForgotPasswordModal(true);
+  };
+
+  const handleLoginWithOtp = async () => {
+    // If in "select" mode, check if the prefilled credential is empty. If so, transition to input mode.
+    if (modalMode === "select" && !modalCredential.trim()) {
+      setModalMode("mobile");
+      return;
+    }
+
+    if (!modalCredential.trim()) {
+      Alert.alert("Required Field", "Please enter your username or registered mobile number.");
+      return;
+    }
+
+    setSendingOtp(true);
+    try {
+      const response = await axios.post(`${CONFIG.API_URL}/login-otp`, {
+        username_or_mobile: modalCredential.trim(),
+      }, { timeout: 10000 });
+
+      setShowForgotPasswordModal(false);
+      
+      const sentMobile = response.data.mobile;
+      const displayMobile = sentMobile.replace(/.(?=.{4})/g, "*"); // Mask for privacy: e.g. ******1234
+      
+      Alert.alert(
+        "OTP Sent",
+        `A login OTP code has been simulated for dev/testing.\nSent to: ${displayMobile}\nCode: ${response.data.otp} (Autofilled)`,
+        [
+          {
+            text: "Verify Now",
+            onPress: () => {
+              router.push({
+                pathname: "/otp",
+                params: { mobile: sentMobile, simulatedOtp: response.data.otp }
+              });
+            }
+          }
+        ]
+      );
+    } catch (error: any) {
+      console.log("Login OTP error detail:", error);
+      if (error.response?.status === 404) {
+        Alert.alert(
+          "Account Not Found",
+          "Credential given doesn't exist. Please sign up to create a new account.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Sign Up",
+              onPress: () => {
+                setShowForgotPasswordModal(false);
+                router.replace("/signup");
+              }
+            }
+          ]
+        );
+      } else {
+        const errorMsg = error.response?.data?.detail || "Failed to send OTP. Please try again.";
+        Alert.alert("Error", errorMsg);
+      }
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleResetPassword = () => {
+    setShowForgotPasswordModal(false);
+    router.push("/forgot-password");
+  };
 
   const handleLogin = async () => {
     if (!usernameOrMobile.trim() || !password.trim()) {
@@ -124,7 +207,7 @@ export default function LoginScreen() {
             <View style={styles.inputWrapper}>
               <View style={styles.passwordHeader}>
                 <Text style={styles.label}>Password</Text>
-                <TouchableOpacity onPress={() => router.push("/forgot-password")}>
+                <TouchableOpacity onPress={handleForgotPasswordPress}>
                   <Text style={styles.forgotText}>Forgot Password?</Text>
                 </TouchableOpacity>
               </View>
@@ -175,6 +258,87 @@ export default function LoginScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Forgot Password Overlay Modal */}
+      <Modal
+        visible={showForgotPasswordModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowForgotPasswordModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {modalMode === "select" ? (
+              <>
+                <Text style={styles.modalTitle}>You can either</Text>
+                
+                <TouchableOpacity 
+                  style={styles.modalBtn} 
+                  onPress={handleLoginWithOtp}
+                >
+                  <Text style={styles.modalBtnText}>Login with OTP</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.modalDividerText}>Or</Text>
+
+                <TouchableOpacity 
+                  style={styles.modalBtn} 
+                  onPress={handleResetPassword}
+                >
+                  <Text style={styles.modalBtnText}>Reset Password</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.modalCancelBtn} 
+                  onPress={() => setShowForgotPasswordModal(false)}
+                >
+                  <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={styles.modalTitle}>Enter Credentials</Text>
+                <Text style={styles.modalSubtitle}>
+                  Please enter your username or registered mobile number to login via OTP.
+                </Text>
+
+                <View style={styles.modalInputContainer}>
+                  <Ionicons name="person-outline" size={20} color={COLORS.textSecondary} style={styles.modalInputIcon} />
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Username or registered mobile"
+                    placeholderTextColor={COLORS.textSecondary}
+                    autoCapitalize="none"
+                    value={modalCredential}
+                    onChangeText={setModalCredential}
+                    autoFocus
+                  />
+                </View>
+
+                <TouchableOpacity 
+                  style={[styles.modalBtn, sendingOtp ? styles.modalBtnDisabled : null]} 
+                  onPress={handleLoginWithOtp}
+                  disabled={sendingOtp}
+                >
+                  {sendingOtp ? (
+                    <ActivityIndicator color={COLORS.surface} />
+                  ) : (
+                    <Text style={styles.modalBtnText}>Send OTP</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.modalCancelBtn} 
+                  onPress={() => setModalMode("select")}
+                  disabled={sendingOtp}
+                >
+                  <Text style={styles.modalCancelBtnText}>Back</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -288,5 +452,97 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 14,
     color: COLORS.primary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(26, 26, 26, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalContent: {
+    width: "100%",
+    backgroundColor: "#F2F7FF",
+    borderRadius: 28,
+    padding: 24,
+    alignItems: "center",
+    ...SHADOWS.medium,
+  },
+  modalTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 18,
+    color: COLORS.textPrimary,
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  modalSubtitle: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+    textAlign: "center",
+    paddingHorizontal: 12,
+  },
+  modalBtn: {
+    backgroundColor: COLORS.primary,
+    width: "100%",
+    height: 52,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    ...SHADOWS.soft,
+  },
+  modalBtnDisabled: {
+    backgroundColor: COLORS.cardBackground,
+  },
+  modalBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: COLORS.surface,
+  },
+  modalDividerText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginVertical: 12,
+  },
+  modalCancelBtn: {
+    borderColor: "#A9C6F5",
+    borderWidth: 1.5,
+    backgroundColor: "#E4EEFD",
+    width: "100%",
+    height: 52,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 12,
+  },
+  modalCancelBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: COLORS.primary,
+  },
+  modalInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.border,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 52,
+    marginBottom: 16,
+    width: "100%",
+    ...SHADOWS.soft,
+  },
+  modalInputIcon: {
+    marginRight: 10,
+  },
+  modalInput: {
+    flex: 1,
+    fontFamily: "Poppins_400Regular",
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    height: "100%",
   },
 });

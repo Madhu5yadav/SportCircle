@@ -5,7 +5,7 @@ from app.database.db import get_db
 from app.models.models import User, OTPVerification, PreferredSport, Wallet, Settings
 from app.schemas.schemas import (
     UserCreate, UserLogin, Token, TokenRefresh, OTPSend, OTPVerify, 
-    OTPVerifyResponse, ForgotPasswordRequest, ResetPasswordRequest,
+    OTPVerifyResponse, ForgotPasswordRequest, ResetPasswordRequest, LoginOTPRequest,
     PersonalDetailsCreate, PreferredSportsCreate, ProfileResponse, 
     UserResponse, WalletResponse, SettingsResponse, ProfileUpdate
 )
@@ -70,6 +70,25 @@ def send_otp(otp_in: OTPSend, db: Session = Depends(get_db)):
     otp_code = OTPService.generate_otp(otp_in.mobile, db)
     # No real SMS gateway is configured; OTP is returned directly for dev/testing.
     return {"message": "OTP sent successfully.", "otp": otp_code}
+
+
+@router.post("/login-otp")
+def login_otp(otp_in: LoginOTPRequest, db: Session = Depends(get_db)):
+    val = otp_in.username_or_mobile.strip()
+    user = db.query(User).filter(
+        (User.username == val) | (User.mobile == val)
+    ).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Credential given doesn't exist. Please sign up."
+        )
+    otp_code = OTPService.generate_otp(user.mobile, db)
+    return {
+        "message": "OTP for login sent.",
+        "otp": otp_code,
+        "mobile": user.mobile
+    }
 
 
 @router.post("/verify-otp")
@@ -161,16 +180,23 @@ def refresh_token(token_in: TokenRefresh, db: Session = Depends(get_db)):
 
 @router.post("/forgot-password")
 def forgot_password(forgot_in: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.mobile == forgot_in.mobile).first()
+    val = forgot_in.username_or_mobile.strip()
+    user = db.query(User).filter(
+        (User.username == val) | (User.mobile == val)
+    ).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Mobile number not registered"
+            detail="Credential given doesn't exist. Please sign up."
         )
         
     otp_code = OTPService.generate_otp(user.mobile, db)
     # No real SMS gateway is configured; OTP is returned directly for dev/testing.
-    return {"message": "OTP for password reset sent.", "otp": otp_code}
+    return {
+        "message": "OTP for password reset sent.",
+        "otp": otp_code,
+        "mobile": user.mobile
+    }
 
 
 @router.post("/reset-password")
