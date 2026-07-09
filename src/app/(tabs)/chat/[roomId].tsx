@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import * as ImagePicker from "expo-image-picker";
 import { 
   View, 
   Text, 
@@ -70,6 +71,8 @@ export default function ChatRoomScreen() {
   const [paymentTitle, setPaymentTitle] = useState("");
   const [roomDetail, setRoomDetail] = useState<any>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [showImageSourceModal, setShowImageSourceModal] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener("keyboardDidShow", (e) => {
@@ -262,23 +265,60 @@ export default function ChatRoomScreen() {
   };
 
   const handleShareImage = () => {
-    Alert.alert(
-      "Share Image",
-      "Simulate uploading a sports court mockup image?",
-      [
-        { text: "Cancel" },
-        {
-          text: "Upload Mockup",
-          onPress: () => {
-            sendMessage({
-              type: "image",
-              image_url: "https://images.unsplash.com/photo-1544698310-74ea9d1c8258?q=80&w=600"
-            });
-            setShowAttachmentMenu(false);
-          }
+    setShowAttachmentMenu(false);
+    setShowImageSourceModal(true);
+  };
+
+  const pickFromSource = async (useCamera: boolean) => {
+    setShowImageSourceModal(false);
+    try {
+      // Request permissions
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "Camera access is required to take a photo.");
+          return;
         }
-      ]
-    );
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "Gallery access is required to select a photo.");
+          return;
+        }
+      }
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8, allowsEditing: true })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8, allowsEditing: true });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setImageUploading(true);
+        try {
+          const formData = new FormData();
+          formData.append("file", {
+            uri: asset.uri,
+            name: asset.fileName || `photo_${Date.now()}.jpg`,
+            type: asset.mimeType || "image/jpeg",
+          } as any);
+
+          const uploadRes = await api.post("/chat/upload-image", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
+
+          sendMessage({
+            type: "image",
+            image_url: uploadRes.data.url,
+          });
+        } catch (err: any) {
+          Alert.alert("Upload Failed", err.response?.data?.detail || "Could not upload image.");
+        } finally {
+          setImageUploading(false);
+        }
+      }
+    } catch (err) {
+      Alert.alert("Error", "Something went wrong when opening the picker.");
+    }
   };
 
   // Group Details / Roster
@@ -686,6 +726,61 @@ export default function ChatRoomScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ===== IMAGE SOURCE PICKER MODAL ===== */}
+      <Modal visible={showImageSourceModal} transparent animationType="fade" onRequestClose={() => setShowImageSourceModal(false)}>
+        <View style={styles.imgPickerOverlay}>
+          <View style={styles.imgPickerCard}>
+            {/* Icon header */}
+            <View style={styles.imgPickerIconRow}>
+              <View style={styles.imgPickerIconCircle}>
+                <Ionicons name="images" size={32} color={COLORS.primary} />
+              </View>
+            </View>
+            <Text style={styles.imgPickerTitle}>Share a Photo</Text>
+            <Text style={styles.imgPickerSubtitle}>Choose where to pick your image from</Text>
+
+            {/* Gallery button */}
+            <TouchableOpacity style={styles.imgPickerBtn} onPress={() => pickFromSource(false)}>
+              <View style={styles.imgPickerBtnIcon}>
+                <Ionicons name="image-outline" size={22} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.imgPickerBtnLabel}>Gallery</Text>
+                <Text style={styles.imgPickerBtnSub}>Pick from your photo library</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Camera button */}
+            <TouchableOpacity style={styles.imgPickerBtn} onPress={() => pickFromSource(true)}>
+              <View style={[styles.imgPickerBtnIcon, { backgroundColor: "#FFF3E0" }]}>
+                <Ionicons name="camera-outline" size={22} color="#F57C00" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.imgPickerBtnLabel}>Camera</Text>
+                <Text style={styles.imgPickerBtnSub}>Take a new photo right now</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Cancel */}
+            <TouchableOpacity style={styles.imgPickerCancelBtn} onPress={() => setShowImageSourceModal(false)}>
+              <Text style={styles.imgPickerCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Uploading overlay */}
+      {imageUploading && (
+        <View style={styles.uploadingOverlay}>
+          <View style={styles.uploadingCard}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.uploadingText}>Uploading image…</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -1131,5 +1226,112 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_500Medium",
     fontSize: 13,
     color: COLORS.textSecondary,
+  },
+
+  // ── Image Picker Modal ──────────────────────────────────
+  imgPickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    paddingBottom: 24,
+  },
+  imgPickerCard: {
+    width: "92%",
+    backgroundColor: COLORS.surface,
+    borderRadius: 28,
+    padding: 24,
+    alignItems: "stretch",
+    ...SHADOWS.medium,
+  },
+  imgPickerIconRow: {
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  imgPickerIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: COLORS.primary + "15",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imgPickerTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 20,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  imgPickerSubtitle: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    marginBottom: 22,
+  },
+  imgPickerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 14,
+  },
+  imgPickerBtnIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.primary + "12",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imgPickerBtnLabel: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+  imgPickerBtnSub: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  imgPickerCancelBtn: {
+    marginTop: 6,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: "#F5F5F5",
+    alignItems: "center",
+  },
+  imgPickerCancelText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+
+  // ── Uploading Overlay ───────────────────────────────────
+  uploadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 999,
+  },
+  uploadingCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    padding: 28,
+    alignItems: "center",
+    gap: 14,
+    ...SHADOWS.medium,
+  },
+  uploadingText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 14,
+    color: COLORS.textPrimary,
   },
 });

@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, desc
 from typing import List, Optional
 from datetime import datetime, timedelta
 import json
+import os
+import shutil
+import uuid
 from decimal import Decimal
 
 from app.database.db import get_db
@@ -411,3 +414,33 @@ def exit_chat(
             db.commit()
             
     return {"message": "Exited chat room successfully"}
+
+
+@router.post("/chat/upload-image")
+async def upload_chat_image(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an image"
+        )
+
+    uploads_dir = os.path.join(os.getcwd(), "uploads")
+    os.makedirs(uploads_dir, exist_ok=True)
+
+    ext = os.path.splitext(file.filename or "image.jpg")[1] or ".jpg"
+    filename = f"chat_{current_user.id}_{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(uploads_dir, filename)
+
+    with open(filepath, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    host = request.headers.get("host", "localhost:8000")
+    scheme = request.url.scheme
+    base_url = f"{scheme}://{host}"
+    url = f"{base_url}/uploads/{filename}"
+
+    return {"url": url}
