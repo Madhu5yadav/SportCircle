@@ -6,23 +6,20 @@ import {
   ScrollView, 
   TouchableOpacity, 
   Image, 
-  FlatList, 
   RefreshControl,
   ActivityIndicator,
   Dimensions,
   Platform,
-  Alert,
-  SafeAreaView,
-  Modal
+  Alert
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
-import { Ionicons, FontAwesome, MaterialCommunityIcons } from "@expo/vector-icons";
-import { COLORS, SPACING, SHADOWS, TYPOGRAPHY, SIZES } from "../../theme/theme";
+import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { COLORS, SPACING, SHADOWS } from "../../theme/theme";
 import { RootState } from "../../redux/store";
 import api from "../../services/api";
 import { setGames } from "../../redux/gameSlice";
-import { setFriends } from "../../redux/friendSlice";
 import { updateWallet } from "../../redux/authSlice";
 import { setNotifications } from "../../redux/notificationSlice";
 import * as Location from "expo-location";
@@ -98,7 +95,6 @@ export default function HomeScreen() {
     }
   };
 
-
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
@@ -150,9 +146,10 @@ export default function HomeScreen() {
         normalizedSuggestions.length > 0
           ? normalizedSuggestions
           : [
-              { id: 101, username: "rahul_s", profile_pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150" },
-              { id: 102, username: "amit_sharma", profile_pic: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=150" },
-              { id: 103, username: "karan_m", profile_pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150" }
+              { id: 101, username: "michael05", profile_pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150" },
+              { id: 102, username: "Kabi_lan", profile_pic: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=150" },
+              { id: 103, username: "Velu10", profile_pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150" },
+              { id: 104, username: "Kau_si", profile_pic: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=150" }
             ]
       );
 
@@ -207,261 +204,223 @@ export default function HomeScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safeContainer}>
+    <SafeAreaView style={styles.safeContainer} edges={['top']}>
       {/* Top Header */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.brandLogo}>Sport<Text style={{ color: COLORS.primary }}>Circle</Text></Text>
-          <Text style={styles.greetingText}>
-            Hello, {auth.user?.first_name || auth.user?.username || "Player"}!
-          </Text>
-          <View style={styles.locationContainer}>
-            <Ionicons name="location-sharp" size={14} color={COLORS.primary} />
-            <Text style={styles.locationText} numberOfLines={1}>
-              {currentAddress}
-            </Text>
-          </View>
-        </View>
-        
+        <Text style={styles.brandLogo}>SPORT CIRCLE</Text>
         <View style={styles.headerActions}>
-          {/* Favorite Friends Launcher */}
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/friends")}>
-            <Ionicons name="people" size={24} color={COLORS.primary} />
-          </TouchableOpacity>
-          
-          {/* Notifications Launcher */}
           <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/notifications")}>
-            <Ionicons name="notifications-outline" size={24} color={COLORS.textPrimary} />
+            <Ionicons name="notifications-outline" size={24} color="#ffffff" />
             {unreadNotifications > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{unreadNotifications}</Text>
               </View>
             )}
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { marginLeft: 16 }]} onPress={() => router.push("/friends")}>
+            <Ionicons name="heart-outline" size={24} color="#ffffff" />
+          </TouchableOpacity>
         </View>
       </View>
 
-      {loading && !refreshing ? (
-        renderSkeletons()
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
-          }
-        >
-          {/* Sponsor Banner Carousel */}
-          <View style={styles.carouselContainer}>
-            <ScrollView
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={handleBannerScroll}
-              style={styles.bannerScroll}
-            >
-              {SPONSOR_BANNERS.map((banner) => (
-                <View key={banner.id} style={styles.bannerCard}>
-                  <Image source={{ uri: banner.image }} style={styles.bannerImg} />
-                  <View style={styles.bannerOverlay}>
-                    <Text style={styles.bannerTitle}>{banner.title}</Text>
-                    <Text style={styles.bannerSubtitle}>{banner.subtitle}</Text>
-                  </View>
-                </View>
-              ))}
-            </ScrollView>
-            
-            {/* Banner dots */}
-            <View style={styles.bannerDots}>
-              {SPONSOR_BANNERS.map((_, idx) => (
-                <View
-                  key={idx}
-                  style={[
-                    styles.bannerDot,
-                    idx === bannerIndex ? styles.bannerDotActive : null,
-                  ]}
-                />
-              ))}
-            </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+        }
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        {/* Greeting Section */}
+        <View style={styles.greetingSection}>
+          <Text style={styles.greetingText}>
+            Welcome back! {auth.user?.first_name || auth.user?.username || "Name"}
+          </Text>
+          <View style={styles.locationContainer}>
+            <Ionicons name="location-sharp" size={16} color={COLORS.textPrimary} />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {currentAddress}
+            </Text>
           </View>
+        </View>
 
-          {/* Quick host game trigger */}
-          <View style={styles.quickLaunchContainer}>
-            <TouchableOpacity style={styles.hostTriggerBtn} onPress={() => router.push("/host-game")}>
-              <View style={styles.hostTriggerIconWrapper}>
-                <Ionicons name="add-circle-sharp" size={32} color={COLORS.surface} />
-              </View>
-              <View style={{ marginLeft: SPACING.md }}>
-                <Text style={styles.hostTriggerTitle}>Host a Game</Text>
-                <Text style={styles.hostTriggerSub}>Set up matches, rules, and invite players</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {/* Upcoming Games (Joined) */}
-          {upcomingGames.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionHeading}>Your Upcoming Games</Text>
-              {upcomingGames.map((g) => (
-                <TouchableOpacity 
-                  key={g.id} 
-                  style={styles.gameCard}
-                  onPress={() => router.push({ pathname: "/(tabs)/explore", params: { gameId: g.id } })}
-                >
-                  <View style={styles.gameHeader}>
-                    <View style={styles.sportBadge}>
-                      <Text style={styles.sportBadgeText}>{g.sport_type}</Text>
-                    </View>
-                    <Text style={styles.gameDate}>{g.game_date} @ {g.start_time.slice(0,5)}</Text>
+        {loading && !refreshing ? (
+          renderSkeletons()
+        ) : (
+          <>
+            {/* Sponsor Banner Carousel */}
+            <View style={styles.carouselContainer}>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={handleBannerScroll}
+                style={styles.bannerScroll}
+              >
+                {SPONSOR_BANNERS.map((banner) => (
+                  <View key={banner.id} style={styles.bannerCard}>
+                    <Image source={{ uri: banner.image }} style={styles.bannerImg} />
                   </View>
-                  <Text style={styles.gameName}>{g.name}</Text>
-                  <Text style={styles.gameLoc}><Ionicons name="location-outline" size={14} /> {g.location}</Text>
-                  <View style={styles.gameFooter}>
-                    <Text style={styles.gameSlots}>
-                      Joined: {g.joined_count}/{g.player_count} players
-                    </Text>
-                    <Text style={styles.upcomingBadge}>Joined</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+                ))}
+              </ScrollView>
+              
+              {/* Banner dots */}
+              <View style={styles.bannerDots}>
+                {SPONSOR_BANNERS.map((_, idx) => (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.bannerDot,
+                      idx === bannerIndex ? styles.bannerDotActive : null,
+                    ]}
+                  />
+                ))}
+              </View>
             </View>
-          )}
 
-          {/* Nearby Games */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionHeading}>Nearby Live Games</Text>
-              <TouchableOpacity onPress={() => router.push("/join-game")}>
-                <Text style={styles.viewAll}>Map View</Text>
+            {/* Host Game Button */}
+            <View style={styles.hostBtnContainer}>
+              <TouchableOpacity style={styles.hostBtn} onPress={() => router.push("/host-game")}>
+                <Text style={styles.hostBtnText}>HOST A GAME</Text>
+                <FontAwesome5 name="angle-double-right" size={20} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
-            
-            {nearbyGames.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No nearby games scheduled yet.</Text>
-                <TouchableOpacity onPress={() => router.push("/host-game")}>
-                  <Text style={styles.emptyLink}>Host one yourself!</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              nearbyGames.slice(0, 3).map((g) => (
-                <TouchableOpacity 
-                  key={g.id} 
-                  style={styles.gameCard}
-                  onPress={() => router.push({ pathname: "/(tabs)/explore", params: { gameId: g.id } })}
-                >
-                  <View style={styles.gameHeader}>
-                    <View style={styles.sportBadge}>
-                      <Text style={styles.sportBadgeText}>{g.sport_type}</Text>
-                    </View>
-                    <Text style={styles.gameFee}>{parseFloat(g.entry_fee) === 0 ? "Free" : `Rs. ${g.entry_fee}`}</Text>
-                  </View>
-                  <Text style={styles.gameName}>{g.name}</Text>
-                  <Text style={styles.gameLoc} numberOfLines={1}>
-                    <Ionicons name="location-outline" size={14} /> {g.location}
-                  </Text>
-                  <View style={styles.gameFooter}>
-                    <Text style={styles.gameSlots}>
-                      Slots: {g.player_count - g.joined_count} remaining
-                    </Text>
-                    <Text style={styles.joinActionText}>Details →</Text>
-                  </View>
-                </TouchableOpacity>
-              ))
-            )}
-          </View>
 
-          {/* Recommended Games */}
-          {recommendedGames.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionHeading}>Recommended For You</Text>
-              {recommendedGames.slice(0, 3).map((g) => (
-                <TouchableOpacity 
-                  key={g.id} 
-                  style={styles.gameCard}
-                  onPress={() => router.push({ pathname: "/(tabs)/explore", params: { gameId: g.id } })}
-                >
-                  <View style={styles.gameHeader}>
-                    <View style={styles.sportBadge}>
-                      <Text style={styles.sportBadgeText}>{g.sport_type}</Text>
-                    </View>
-                    <Text style={styles.recommendedTag}>Matching Interest</Text>
-                  </View>
-                  <Text style={styles.gameName}>{g.name}</Text>
-                  <Text style={styles.gameLoc} numberOfLines={1}><Ionicons name="location-outline" size={14} /> {g.location}</Text>
-                  <View style={styles.gameFooter}>
-                    <Text style={styles.gameSlots}>
-                      {g.joined_count}/{g.player_count} Joined
-                    </Text>
-                    <Text style={styles.joinActionText}>Join Match</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Nearby Turfs */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionHeading}>Featured Turfs & Grounds</Text>
-              <TouchableOpacity onPress={() => router.push("/(tabs)/booking")}>
-                <Text style={styles.viewAll}>Book Slot</Text>
-              </TouchableOpacity>
-            </View>
-            
-            {nearbyTurfs.length === 0 ? (
-              <ActivityIndicator color={COLORS.primary} />
-            ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.turfScroll}>
-                {nearbyTurfs.map((t) => (
+            {/* Upcoming Games */}
+            {upcomingGames.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionHeading}>Upcoming Games</Text>
+                {upcomingGames.map((g) => (
                   <TouchableOpacity 
-                    key={t.id} 
-                    style={styles.turfCard}
-                    onPress={() => router.push({ pathname: "/(tabs)/booking", params: { venueId: t.id } })}
+                    key={g.id} 
+                    style={styles.upcomingGameCard}
+                    onPress={() => router.push({ pathname: "/(tabs)/explore", params: { gameId: g.id } })}
                   >
-                    <Image source={{ uri: t.image_url || "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?q=80&w=250" }} style={styles.turfImg} />
-                    <View style={styles.turfInfo}>
-                      <Text style={styles.turfName} numberOfLines={1}>{t.name}</Text>
-                      <Text style={styles.turfSport}>{t.sport}</Text>
-                      <View style={styles.turfFooter}>
-                        <Text style={styles.turfPrice}>Rs. {t.price_per_hour}/hr</Text>
-                        <View style={styles.turfRating}>
-                          <Ionicons name="star" size={12} color="#FFD700" />
-                          <Text style={styles.ratingText}>{t.rating}</Text>
-                        </View>
+                    <View style={styles.upcomingGameTopRow}>
+                      <Text style={styles.upcomingGameTime}>{g.game_date}, {g.start_time.slice(0,5)} - {g.end_time.slice(0,5)}</Text>
+                      <View style={styles.joinedPill}>
+                        <Text style={styles.joinedPillText}>Joined</Text>
                       </View>
+                    </View>
+                    <View style={styles.upcomingGameMiddleRow}>
+                      <Text style={styles.upcomingGameSport}>{g.sport_type}</Text>
+                      <Text style={styles.upcomingGameSlots}>{g.player_count - g.joined_count} Slots Left</Text>
+                    </View>
+                    <View style={styles.upcomingGameBottomRow}>
+                      <Ionicons name="location-sharp" size={14} color={COLORS.textPrimary} />
+                      <Text style={styles.upcomingGameVenue}>{g.location}</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
-              </ScrollView>
+              </View>
             )}
-          </View>
 
-          {/* Players You Might Know */}
-          <View style={[styles.section, { marginBottom: 100 }]}>
-            <Text style={styles.sectionHeading}>Players You Might Know</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.playerScroll}>
-              {suggestedPlayers.map((player) => (
-                <View key={player.friend_id || player.id} style={styles.playerCard}>
-                  <Image source={{ uri: player.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150" }} style={styles.playerAvatar} />
-                  <Text style={styles.playerName} numberOfLines={1}>@{player.username}</Text>
-                  <TouchableOpacity style={styles.addFriendBtn} onPress={() => handleAddFriend(player.friend_id || player.id)}>
-                    <Ionicons name="person-add-outline" size={14} color={COLORS.surface} />
-                    <Text style={styles.addFriendBtnText}>Add</Text>
-                  </TouchableOpacity>
+            {/* Games near you */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionHeading}>Games near you</Text>
+                <TouchableOpacity onPress={() => router.push("/join-game")}>
+                  <Ionicons name="arrow-forward" size={24} color={COLORS.textPrimary} />
+                </TouchableOpacity>
+              </View>
+              
+              {nearbyGames.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>No nearby games scheduled yet.</Text>
                 </View>
-              ))}
-            </ScrollView>
-          </View>
-        </ScrollView>
-      )}
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                  {nearbyGames.slice(0, 3).map((g) => (
+                    <TouchableOpacity 
+                      key={g.id} 
+                      style={styles.nearbyGameCard}
+                      onPress={() => router.push({ pathname: "/(tabs)/explore", params: { gameId: g.id } })}
+                    >
+                      <View style={styles.nearbyGameTopRow}>
+                        <Text style={styles.nearbyGameSport}>{g.sport_type}</Text>
+                        <Text style={styles.nearbyGameHyphen}>-</Text>
+                        <Text style={styles.nearbyGamePlayers}>{g.joined_count}/{g.player_count}</Text>
+                        <Ionicons name="people" size={16} color={COLORS.textPrimary} style={{marginLeft: 4, marginRight: 'auto'}} />
+                        <TouchableOpacity style={styles.joinBtn} onPress={() => router.push({ pathname: "/(tabs)/explore", params: { gameId: g.id } })}>
+                          <Text style={styles.joinBtnText}>Join</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.nearbyGameTime}>{g.game_date}, {g.start_time.slice(0,5)} - {g.end_time.slice(0,5)}</Text>
+                      <View style={styles.nearbyGameBottomRow}>
+                        <Ionicons name="location-sharp" size={14} color={COLORS.textPrimary} />
+                        <Text style={styles.nearbyGameVenue} numberOfLines={1}>{g.location}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
 
-      {/* Floating Host Action Button */}
-      <TouchableOpacity 
-        style={styles.floatingActionBtn}
-        onPress={() => router.push("/host-game")}
-      >
-        <Ionicons name="add" size={28} color={COLORS.surface} />
-      </TouchableOpacity>
+            {/* Venues nearby you */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionHeading}>Venues nearby you</Text>
+                <TouchableOpacity onPress={() => router.push("/(tabs)/booking")}>
+                  <Ionicons name="arrow-forward" size={24} color={COLORS.textPrimary} />
+                </TouchableOpacity>
+              </View>
+              
+              {nearbyTurfs.length === 0 ? (
+                <ActivityIndicator color={COLORS.primary} />
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                  {nearbyTurfs.map((t) => (
+                    <TouchableOpacity 
+                      key={t.id} 
+                      style={styles.venueCard}
+                      onPress={() => router.push({ pathname: "/(tabs)/booking", params: { venueId: t.id } })}
+                    >
+                      <View style={styles.venueImgContainer}>
+                        <Image source={{ uri: t.image_url || "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?q=80&w=250" }} style={styles.venueImg} />
+                        <View style={styles.venueRating}>
+                          <Text style={styles.venueRatingText}>{t.rating}</Text>
+                          <Ionicons name="star" size={10} color="#FFD700" style={{marginLeft: 2}} />
+                        </View>
+                      </View>
+                      <View style={styles.venueInfo}>
+                        <Text style={styles.venueName} numberOfLines={1}>{t.name}</Text>
+                        <View style={styles.venueLocRow}>
+                          <Ionicons name="location-sharp" size={12} color={COLORS.textPrimary} />
+                          <Text style={styles.venueLocText} numberOfLines={1}>{t.location}</Text>
+                        </View>
+                        <Text style={styles.venuePrice}>Rs. {t.price_per_hour}/hr</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+
+            {/* Players You Might Know */}
+            <View style={[styles.section, { paddingHorizontal: 0, paddingLeft: SPACING.xl }]}>
+              <View style={[styles.sectionHeader, { paddingRight: SPACING.xl }]}>
+                <Text style={styles.sectionHeading}>Players you might know</Text>
+                <TouchableOpacity onPress={() => router.push("/friends")}>
+                  <Ionicons name="arrow-forward" size={24} color={COLORS.textPrimary} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.playersContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                  {suggestedPlayers.map((player) => (
+                    <View key={player.friend_id || player.id} style={styles.playerCard}>
+                      <Image source={{ uri: player.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150" }} style={styles.playerAvatar} />
+                      <Text style={styles.playerName} numberOfLines={1}>{player.username}</Text>
+                      <TouchableOpacity style={styles.addFriendBtn} onPress={() => handleAddFriend(player.friend_id || player.id)}>
+                        <Text style={styles.addFriendBtnText}>Add</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+            
+          </>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -469,8 +428,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
-    backgroundColor: COLORS.background,
-    paddingTop: Platform.OS === "android" ? 40 : 0,
+    backgroundColor: "#F2F6FF", // Light blueish background like mockup
   },
   header: {
     flexDirection: "row",
@@ -478,56 +436,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.md,
-    backgroundColor: COLORS.surface,
-    borderBottomWidth: 1.5,
-    borderBottomColor: COLORS.border,
-    ...SHADOWS.soft,
+    backgroundColor: COLORS.primary,
   },
   brandLogo: {
     fontFamily: "Poppins_700Bold",
-    fontSize: 22,
-    color: COLORS.textPrimary,
-    letterSpacing: -0.5,
-  },
-  headerLeft: {
-    flex: 1,
-  },
-  greetingText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 15,
-    color: COLORS.textPrimary,
-    marginTop: 2,
-  },
-  locationContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 2,
-  },
-  locationText: {
-    fontFamily: "Poppins_500Medium",
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginLeft: 4,
-    maxWidth: 160,
+    fontSize: 20,
+    color: "#ffffff",
   },
   headerActions: {
     flexDirection: "row",
     alignItems: "center",
   },
   actionBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: COLORS.background,
+    position: "relative",
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 10,
-    position: "relative",
   },
   badge: {
     position: "absolute",
-    top: -2,
-    right: -2,
+    top: -4,
+    right: -4,
     backgroundColor: COLORS.error,
     borderRadius: 8,
     width: 16,
@@ -540,320 +468,311 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontFamily: "Poppins_700Bold",
   },
+  greetingSection: {
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.sm,
+  },
+  greetingText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 16,
+    color: COLORS.textPrimary,
+  },
+  locationContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  locationText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginLeft: 6,
+  },
   carouselContainer: {
-    marginTop: SPACING.lg,
+    marginTop: SPACING.md,
     paddingHorizontal: SPACING.xl,
   },
   bannerScroll: {
-    borderRadius: 24,
+    borderRadius: 16,
     overflow: "hidden",
   },
   bannerCard: {
     width: CAROUSEL_WIDTH,
-    height: 160,
-    position: "relative",
+    height: 150,
   },
   bannerImg: {
     width: "100%",
     height: "100%",
     resizeMode: "cover",
   },
-  bannerOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(29, 94, 201, 0.65)", // Custom primary overlay
-    padding: SPACING.md,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  bannerTitle: {
-    fontFamily: "Poppins_700Bold",
-    fontSize: 18,
-    color: COLORS.surface,
-  },
-  bannerSubtitle: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 12,
-    color: COLORS.surface,
-    marginTop: 2,
-  },
   bannerDots: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 8,
+    marginTop: 12,
   },
   bannerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.cardBackground,
-    marginHorizontal: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#D3D3D3",
+    marginHorizontal: 4,
   },
   bannerDotActive: {
-    width: 14,
-    backgroundColor: COLORS.primary,
+    backgroundColor: "#8CA2EB",
   },
-  quickLaunchContainer: {
-    marginHorizontal: SPACING.xl,
+  hostBtnContainer: {
+    paddingHorizontal: SPACING.xl,
     marginTop: SPACING.lg,
   },
-  hostTriggerBtn: {
+  hostBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    borderRadius: 24,
-    ...SHADOWS.medium,
+    justifyContent: "space-between",
+    backgroundColor: "#DDE8F9",
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: SPACING.xl,
   },
-  hostTriggerIconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  hostTriggerTitle: {
+  hostBtnText: {
     fontFamily: "Poppins_600SemiBold",
     fontSize: 16,
-    color: COLORS.surface,
-  },
-  hostTriggerSub: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 11,
-    color: COLORS.background,
-    marginTop: 1,
+    color: COLORS.primary,
   },
   section: {
-    marginTop: 24,
+    marginTop: SPACING.xl,
     paddingHorizontal: SPACING.xl,
   },
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sectionHeading: {
-    fontFamily: "Poppins_700Bold",
+    fontFamily: "Poppins_600SemiBold",
     fontSize: 18,
     color: COLORS.textPrimary,
-    marginBottom: 12,
   },
-  viewAll: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 13,
-    color: COLORS.primary,
+  horizontalScroll: {
+    paddingBottom: 8,
   },
-  gameCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
+  upcomingGameCard: {
+    backgroundColor: "#DDE8F9",
+    borderRadius: 16,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    ...SHADOWS.soft,
   },
-  gameHeader: {
+  upcomingGameTopRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 8,
   },
-  sportBadge: {
-    backgroundColor: COLORS.cardBackground + "60",
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  sportBadgeText: {
+  upcomingGameTime: {
     fontFamily: "Poppins_600SemiBold",
-    fontSize: 11,
-    color: COLORS.primary,
-  },
-  gameDate: {
-    fontFamily: "Poppins_500Medium",
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  gameFee: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 12,
-    color: COLORS.success,
-  },
-  gameName: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 16,
+    fontSize: 14,
     color: COLORS.textPrimary,
-    marginBottom: 4,
   },
-  gameLoc: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    marginBottom: 12,
+  joinedPill: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  gameFooter: {
+  joinedPillText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontFamily: "Poppins_500Medium",
+  },
+  upcomingGameMiddleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: 10,
+    marginBottom: 8,
   },
-  gameSlots: {
-    fontFamily: "Poppins_500Medium",
-    fontSize: 13,
+  upcomingGameSport: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
     color: COLORS.textPrimary,
   },
-  upcomingBadge: {
-    fontFamily: "Poppins_600SemiBold",
+  upcomingGameSlots: {
+    fontFamily: "Poppins_500Medium",
     fontSize: 12,
-    color: COLORS.primary,
+    color: COLORS.textSecondary,
   },
-  recommendedTag: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 11,
-    color: COLORS.primary,
+  upcomingGameBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
   },
-  joinActionText: {
+  upcomingGameVenue: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginLeft: 6,
+  },
+  nearbyGameCard: {
+    backgroundColor: "#DDE8F9",
+    borderRadius: 16,
+    padding: SPACING.md,
+    marginRight: SPACING.md,
+    width: 260,
+  },
+  nearbyGameTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  nearbyGameSport: {
     fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  nearbyGameHyphen: {
+    marginHorizontal: 8,
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  nearbyGamePlayers: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  joinBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  joinBtnText: {
+    color: "#ffffff",
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+  },
+  nearbyGameTime: {
+    fontFamily: "Poppins_400Regular",
     fontSize: 13,
-    color: COLORS.primary,
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+  },
+  nearbyGameBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  nearbyGameVenue: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    marginLeft: 6,
+    flex: 1,
+  },
+  venueCard: {
+    backgroundColor: "#DDE8F9",
+    borderRadius: 16,
+    marginRight: SPACING.md,
+    width: 180,
+    overflow: "hidden",
+  },
+  venueImgContainer: {
+    width: "100%",
+    height: 100,
+    position: "relative",
+  },
+  venueImg: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  venueRating: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  venueRatingText: {
+    color: "#ffffff",
+    fontFamily: "Poppins_700Bold",
+    fontSize: 12,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: {width: -1, height: 1},
+    textShadowRadius: 10
+  },
+  venueInfo: {
+    padding: SPACING.md,
+  },
+  venueName: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginBottom: 4,
+  },
+  venueLocRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  venueLocText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: COLORS.textPrimary,
+    marginLeft: 4,
+    flex: 1,
+  },
+  venuePrice: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: COLORS.textPrimary,
+  },
+  playersContainer: {
+    backgroundColor: "#DDE8F9",
+    padding: SPACING.lg,
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
+  },
+  playerCard: {
+    alignItems: "center",
+    marginRight: SPACING.xl,
+    width: 64,
+  },
+  playerAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginBottom: 8,
+  },
+  playerName: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  addFriendBtn: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  addFriendBtnText: {
+    color: "#ffffff",
+    fontFamily: "Poppins_500Medium",
+    fontSize: 10,
   },
   emptyCard: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    padding: 30,
+    backgroundColor: "#DDE8F9",
+    borderRadius: 16,
+    padding: 24,
     alignItems: "center",
-    justifyContent: "center",
-    ...SHADOWS.soft,
   },
   emptyText: {
     fontFamily: "Poppins_400Regular",
     fontSize: 14,
     color: COLORS.textSecondary,
-  },
-  emptyLink: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 14,
-    color: COLORS.primary,
-    marginTop: 6,
-  },
-  turfScroll: {
-    paddingBottom: 8,
-  },
-  turfCard: {
-    width: 170,
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    marginRight: SPACING.md,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    overflow: "hidden",
-    ...SHADOWS.soft,
-  },
-  turfImg: {
-    width: "100%",
-    height: 100,
-    resizeMode: "cover",
-  },
-  turfInfo: {
-    padding: SPACING.sm,
-  },
-  turfName: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 13,
-    color: COLORS.textPrimary,
-  },
-  turfSport: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 1,
-  },
-  turfFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: 6,
-  },
-  turfPrice: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 11,
-    color: COLORS.textPrimary,
-  },
-  turfRating: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  ratingText: {
-    fontFamily: "Poppins_500Medium",
-    fontSize: 11,
-    color: COLORS.textPrimary,
-    marginLeft: 2,
-  },
-  playerScroll: {
-    paddingBottom: 8,
-  },
-  playerCard: {
-    width: 110,
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.border,
-    borderWidth: 1.5,
-    borderRadius: 20,
-    padding: SPACING.md,
-    alignItems: "center",
-    marginRight: SPACING.md,
-    ...SHADOWS.soft,
-  },
-  playerAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginBottom: 8,
-  },
-  playerName: {
-    fontFamily: "Poppins_500Medium",
-    fontSize: 12,
-    color: COLORS.textPrimary,
-    marginBottom: 8,
-    textAlign: "center",
-    width: "100%",
-  },
-  addFriendBtn: {
-    flexDirection: "row",
-    backgroundColor: COLORS.primary,
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  addFriendBtnText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 10,
-    color: COLORS.surface,
-    marginLeft: 2,
-  },
-  floatingActionBtn: {
-    position: "absolute",
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: COLORS.primary,
-    justifyContent: "center",
-    alignItems: "center",
-    ...SHADOWS.medium,
   },
   skeletonContainer: {
     padding: SPACING.xl,
@@ -862,7 +781,7 @@ const styles = StyleSheet.create({
   skeletonBanner: {
     height: 160,
     backgroundColor: COLORS.cardBackground + "40",
-    borderRadius: 24,
+    borderRadius: 16,
   },
   skeletonTitle: {
     height: 24,
@@ -873,6 +792,6 @@ const styles = StyleSheet.create({
   skeletonCard: {
     height: 110,
     backgroundColor: COLORS.cardBackground + "40",
-    borderRadius: 20,
+    borderRadius: 16,
   },
 });

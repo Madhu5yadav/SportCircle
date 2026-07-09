@@ -7,9 +7,9 @@ import { useEffect } from "react";
 import { Image, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Provider } from "react-redux";
+import NotificationToast from "../components/NotificationToast";
 import store from "../redux/store";
 import { COLORS } from "../theme/theme";
-import NotificationToast from "../components/NotificationToast";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -38,7 +38,7 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) {
     return (
       <View style={[styles.splashContainer, { backgroundColor: COLORS.primary }]}>
-        <StatusBar style="light" />
+        <StatusBar style="light" backgroundColor={COLORS.primary} />
         <Image
           source={require("../../assets/images/splash-icon.png")}
           style={styles.splashImage}
@@ -51,13 +51,13 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Provider store={store}>
-        <StatusBar style="dark" />
+        <StatusBar style="light" backgroundColor={COLORS.primary} />
         {/* Global Notification Toast — visible on any screen */}
         <NotificationToast />
         <Stack
           screenOptions={{
             headerStyle: {
-              backgroundColor: COLORS.surface,
+              backgroundColor: COLORS.primary,
             },
             headerTintColor: COLORS.primary,
             headerTitleStyle: {
@@ -65,7 +65,7 @@ export default function RootLayout() {
               color: COLORS.textPrimary,
             },
             contentStyle: {
-              backgroundColor: COLORS.background,
+              backgroundColor: COLORS.primary,
             },
             animation: "slide_from_right",
           }}
