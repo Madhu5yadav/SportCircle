@@ -327,6 +327,9 @@ class ChatRoomResponse(BaseModel):
     squad_id: Optional[int] = None
     created_at: datetime
     last_message: Optional[MessageResponse] = None
+    game_date: Optional[date] = None
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
 
     class Config:
         from_attributes = True

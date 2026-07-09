@@ -283,8 +283,18 @@ export default function ProfileScreen() {
                 <Text style={styles.emptyText}>No games hosted or joined yet.</Text>
               ) : (
                 userGames.map((g) => {
-                  const gameDate = new Date(g.game_date);
-                  const isPast = gameDate < new Date();
+                  let isPast = false;
+                  try {
+                    if (g.game_date && g.end_time) {
+                      const gameEnd = new Date(`${g.game_date}T${g.end_time}`);
+                      isPast = gameEnd.getTime() < new Date().getTime();
+                    } else if (g.game_date) {
+                      const gameStart = new Date(g.game_date);
+                      isPast = gameStart.getTime() < new Date().getTime();
+                    }
+                  } catch (e) {
+                    isPast = false;
+                  }
                   return (
                     <View key={g.id} style={styles.historyCard}>
                       <View style={styles.historyHeader}>

@@ -26,6 +26,17 @@ export default function JoinGameWebScreen() {
 
   const auth = useSelector((state: RootState) => state.auth);
   const { games } = useSelector((state: RootState) => state.game);
+  
+  const now = new Date();
+  const activeGames = (games || []).filter((g: any) => {
+    try {
+      if (!g.game_date || !g.start_time) return false;
+      const gameStart = new Date(`${g.game_date}T${g.start_time}`);
+      return gameStart.getTime() > now.getTime();
+    } catch (e) {
+      return false;
+    }
+  });
 
   const [viewMode, setViewMode] = useState<"map" | "list">("list"); // Default to list on web
   const [loading, setLoading] = useState(false);
@@ -113,7 +124,7 @@ export default function JoinGameWebScreen() {
             <Text style={styles.radarOverlayText}>GPS Radar: Match Coordinates</Text>
 
             {/* Positioned Markers */}
-            {games.map((g, index) => {
+            {activeGames.map((g, index) => {
               // Convert simple random displacement for visual effect
               const offsetAngle = (index * 45) * (Math.PI / 180);
               const distanceOffset = 60 + (index * 25) % 100;
@@ -163,7 +174,7 @@ export default function JoinGameWebScreen() {
           <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>
         ) : (
           <FlatList
-            data={games}
+            data={activeGames}
             keyExtractor={(item) => item.id.toString()}
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}

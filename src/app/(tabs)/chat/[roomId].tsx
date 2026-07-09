@@ -66,11 +66,32 @@ export default function ChatRoomScreen() {
   // Payment Form
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentTitle, setPaymentTitle] = useState("");
+  const [roomDetail, setRoomDetail] = useState<any>(null);
+
+  const isChatBlocked = () => {
+    if (!roomDetail || roomDetail.type !== "game") return false;
+    if (!roomDetail.game_date || !roomDetail.end_time) return false;
+    
+    try {
+      const now = new Date();
+      const gameEnd = new Date(`${roomDetail.game_date}T${roomDetail.end_time}`);
+      const blockTime = new Date(gameEnd.getTime() + 10 * 60 * 1000);
+      return now > blockTime;
+    } catch (e) {
+      return false;
+    }
+  };
 
   // Load chat profile and messages
   const loadChatData = async () => {
     setLoading(true);
     try {
+      try {
+        const roomRes = await api.get(`/chat/room/${parsedRoomId}`);
+        setRoomDetail(roomRes.data);
+      } catch (err) {
+        console.log("Error loading room detail metadata:", err);
+      }
       const response = await api.get(`/messages?room_id=${parsedRoomId}`);
       // Parse JSON fields
       const formatted = response.data.map((m: any) => ({
@@ -104,6 +125,10 @@ export default function ChatRoomScreen() {
   }, [roomId]);
 
   const sendMessage = async (payload: any) => {
+    if (isChatBlocked()) {
+      Alert.alert("Chat Archived", "You cannot send messages to this room anymore.");
+      return;
+    }
     try {
       const response = await api.post(`/chat?room_id=${parsedRoomId}`, payload);
       // Clean input
@@ -457,35 +482,42 @@ export default function ChatRoomScreen() {
           </View>
         )}
 
-        {/* Input Bar */}
-        <View style={styles.inputBar}>
-          <TouchableOpacity 
-            style={styles.attachmentBtn} 
-            onPress={() => setShowAttachmentMenu(!showAttachmentMenu)}
-          >
-            <Ionicons 
-              name={showAttachmentMenu ? "close-circle" : "add-circle"} 
-              size={28} 
-              color={COLORS.primary} 
+        {/* Input Bar or Blocked Banner */}
+        {isChatBlocked() ? (
+          <View style={styles.blockedBar}>
+            <Ionicons name="lock-closed" size={20} color={COLORS.textSecondary} style={{ marginRight: 8 }} />
+            <Text style={styles.blockedText}>Chat is archived because the game has concluded.</Text>
+          </View>
+        ) : (
+          <View style={styles.inputBar}>
+            <TouchableOpacity 
+              style={styles.attachmentBtn} 
+              onPress={() => setShowAttachmentMenu(!showAttachmentMenu)}
+            >
+              <Ionicons 
+                name={showAttachmentMenu ? "close-circle" : "add-circle"} 
+                size={28} 
+                color={COLORS.primary} 
+              />
+            </TouchableOpacity>
+            
+            <TextInput
+              style={styles.chatInput}
+              placeholder="Type message here..."
+              placeholderTextColor={COLORS.textSecondary}
+              value={inputMessage}
+              onChangeText={(text) => {
+                setInputMessage(text);
+                if (text.length > 0 && !typing) handleTypingStatus(true);
+                if (text.length === 0 && typing) handleTypingStatus(false);
+              }}
             />
-          </TouchableOpacity>
-          
-          <TextInput
-            style={styles.chatInput}
-            placeholder="Type message here..."
-            placeholderTextColor={COLORS.textSecondary}
-            value={inputMessage}
-            onChangeText={(text) => {
-              setInputMessage(text);
-              if (text.length > 0 && !typing) handleTypingStatus(true);
-              if (text.length === 0 && typing) handleTypingStatus(false);
-            }}
-          />
 
-          <TouchableOpacity style={styles.sendBtn} onPress={handleSendText}>
-            <Ionicons name="send" size={20} color={COLORS.surface} />
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity style={styles.sendBtn} onPress={handleSendText}>
+              <Ionicons name="send" size={20} color={COLORS.surface} />
+            </TouchableOpacity>
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       {/* POLL CREATION MODAL */}
@@ -1020,5 +1052,20 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     color: COLORS.surface,
     fontSize: 14,
+  },
+  blockedBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F5F5F5",
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+  },
+  blockedText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 13,
+    color: COLORS.textSecondary,
   },
 });

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, desc
 from typing import List, Optional
+from datetime import datetime, timedelta
 import json
 from decimal import Decimal
 
@@ -59,10 +60,77 @@ def get_chat_rooms(
             game_id=r.game_id,
             squad_id=r.squad_id,
             created_at=r.created_at,
-            last_message=last_msg_res
+            last_message=last_msg_res,
+            game_date=r.game.game_date if (r.game_id and r.game) else None,
+            start_time=r.game.start_time if (r.game_id and r.game) else None,
+            end_time=r.game.end_time if (r.game_id and r.game) else None
         ))
         
     return rooms_response
+
+
+@router.get("/chat/room/{room_id}", response_model=ChatRoomResponse)
+def get_chat_room(
+    room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Chat room not found")
+        
+    # Check if participant in game/squad
+    is_authorized = False
+    if room.game_id:
+        is_authorized = db.query(Participant).filter(
+            Participant.game_id == room.game_id,
+            Participant.user_id == current_user.id
+        ).first() is not None
+    elif room.squad_id:
+        is_authorized = db.query(SquadMember).filter(
+            SquadMember.squad_id == room.squad_id,
+            SquadMember.user_id == current_user.id
+        ).first() is not None
+        
+    if not is_authorized:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to view this chat room"
+        )
+        
+    last_msg = (
+        db.query(Message)
+        .filter(Message.chat_room_id == room.id)
+        .order_by(Message.id.desc())
+        .first()
+    )
+    
+    last_msg_res = None
+    if last_msg:
+        last_msg_res = MessageResponse(
+            id=last_msg.id,
+            chat_room_id=last_msg.chat_room_id,
+            sender_id=last_msg.sender_id,
+            sender_username=last_msg.sender.username,
+            sender_profile_pic=last_msg.sender.profile_pic,
+            content=last_msg.content,
+            image_url=last_msg.image_url,
+            type=last_msg.type,
+            created_at=last_msg.created_at
+        )
+        
+    return ChatRoomResponse(
+        id=room.id,
+        name=room.name,
+        type=room.type,
+        game_id=room.game_id,
+        squad_id=room.squad_id,
+        created_at=room.created_at,
+        last_message=last_msg_res,
+        game_date=room.game.game_date if (room.game_id and room.game) else None,
+        start_time=room.game.start_time if (room.game_id and room.game) else None,
+        end_time=room.game.end_time if (room.game_id and room.game) else None
+    )
 
 
 @router.get("/messages", response_model=List[MessageResponse])
@@ -131,11 +199,19 @@ async def post_message(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    # Verify authorization
     room = db.query(ChatRoom).filter(ChatRoom.id == room_id).first()
     if not room:
         raise HTTPException(status_code=404, detail="Chat room not found")
         
+    # Block chat if 10 mins past game expiration
+    if room.game_id and room.game:
+        game_end_dt = datetime.combine(room.game.game_date, room.game.end_time)
+        if datetime.now() > game_end_dt + timedelta(minutes=10):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Chatting is blocked as this game concluded more than 10 minutes ago"
+            )
+            
     # Serialize poll options / vote shells if present
     opts_json = None
     votes_json = None

@@ -92,6 +92,22 @@ export default function ExploreScreen() {
 
   // Filter local results based on state
   const filteredResults = games.filter((game) => {
+    // Hide past games, except if searching for the specific deep-linked game ID
+    const now = new Date();
+    let isFuture = true;
+    try {
+      if (game.game_date && game.start_time) {
+        const gameStart = new Date(`${game.game_date}T${game.start_time}`);
+        isFuture = gameStart.getTime() > now.getTime();
+      }
+    } catch (e) {
+      isFuture = false;
+    }
+    const isTargetGame = !!(params.gameId && game.id.toString() === params.gameId.toString());
+    if (!isFuture && !isTargetGame) {
+      return false;
+    }
+
     // Search query match
     const matchesSearch = 
       game.name.toLowerCase().includes(searchQuery.toLowerCase()) ||

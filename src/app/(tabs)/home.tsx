@@ -113,15 +113,28 @@ export default function HomeScreen() {
       const allGames = gamesRes.data;
       dispatch(setGames(allGames));
 
+      const now = new Date();
+      const isGameFuture = (g: any) => {
+        try {
+          if (!g.game_date || !g.start_time) return false;
+          const gameStart = new Date(`${g.game_date}T${g.start_time}`);
+          return gameStart.getTime() > now.getTime();
+        } catch (e) {
+          return false;
+        }
+      };
+
+      const futureGames = allGames.filter(isGameFuture);
+
       // Separate games for display
-      setNearbyGames(allGames.filter((g: any) => !g.is_joined));
-      setUpcomingGames(allGames.filter((g: any) => g.is_joined));
+      setNearbyGames(futureGames.filter((g: any) => !g.is_joined));
+      setUpcomingGames(futureGames.filter((g: any) => g.is_joined));
       
       // Recommended games based on user preferred sports
       try {
         const profileRes = await api.get("/profile");
         const prefSports = profileRes.data.preferred_sports || [];
-        setRecommendedGames(allGames.filter((g: any) => prefSports.includes(g.sport_type) && !g.is_joined));
+        setRecommendedGames(futureGames.filter((g: any) => prefSports.includes(g.sport_type) && !g.is_joined));
         
         // Sync Redux wallet balance in case of updates
         dispatch(updateWallet(parseFloat(profileRes.data.wallet.balance)));
