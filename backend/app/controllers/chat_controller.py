@@ -28,6 +28,8 @@ def get_chat_rooms(
     squad_rooms = db.query(ChatRoom).filter(ChatRoom.squad_id.in_(joined_squads)).all()
     
     all_rooms = game_rooms + squad_rooms
+    # Sort rooms by creation time in descending order (newest first)
+    all_rooms.sort(key=lambda r: r.created_at or datetime.min, reverse=True)
     
     rooms_response = []
     for r in all_rooms:
