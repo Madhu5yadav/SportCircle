@@ -13,7 +13,8 @@ import {
   Modal,
   Alert,
   ScrollView,
-  SafeAreaView
+  SafeAreaView,
+  Keyboard
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
@@ -67,6 +68,21 @@ export default function ChatRoomScreen() {
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentTitle, setPaymentTitle] = useState("");
   const [roomDetail, setRoomDetail] = useState<any>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const isChatBlocked = () => {
     if (!roomDetail || roomDetail.type !== "game") return false;
@@ -333,9 +349,9 @@ export default function ChatRoomScreen() {
       </View>
 
       <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "padding"}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : (keyboardHeight > 0 ? -60 : 0)}
       >
         {/* Messages list */}
         {loading && messages.length === 0 ? (
