@@ -16,7 +16,10 @@ class OTPVerifyResponse(BaseModel):
     verified: bool
 
 class ForgotPasswordRequest(BaseModel):
-    mobile: str
+    username_or_mobile: str
+
+class LoginOTPRequest(BaseModel):
+    username_or_mobile: str
 
 class ResetPasswordRequest(BaseModel):
     mobile: str

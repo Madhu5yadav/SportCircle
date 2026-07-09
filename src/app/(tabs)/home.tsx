@@ -188,7 +188,7 @@ export default function HomeScreen() {
     try {
       await api.post("/friend-request", { friend_id: friendId });
       Alert.alert("Friend Request Sent!", "They will appear in your friends list once accepted.");
-      setSuggestedPlayers(suggestedPlayers.filter(p => p.id !== friendId));
+      setSuggestedPlayers(suggestedPlayers.filter(p => (p.friend_id || p.id) !== friendId));
     } catch (error: any) {
       Alert.alert("Error", error.response?.data?.detail || "Could not send friend request.");
     }
@@ -441,10 +441,10 @@ export default function HomeScreen() {
             <Text style={styles.sectionHeading}>Players You Might Know</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.playerScroll}>
               {suggestedPlayers.map((player) => (
-                <View key={player.id} style={styles.playerCard}>
+                <View key={player.friend_id || player.id} style={styles.playerCard}>
                   <Image source={{ uri: player.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150" }} style={styles.playerAvatar} />
                   <Text style={styles.playerName} numberOfLines={1}>@{player.username}</Text>
-                  <TouchableOpacity style={styles.addFriendBtn} onPress={() => handleAddFriend(player.id)}>
+                  <TouchableOpacity style={styles.addFriendBtn} onPress={() => handleAddFriend(player.friend_id || player.id)}>
                     <Ionicons name="person-add-outline" size={14} color={COLORS.surface} />
                     <Text style={styles.addFriendBtnText}>Add</Text>
                   </TouchableOpacity>

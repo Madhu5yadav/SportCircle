@@ -19,40 +19,60 @@ import { CONFIG } from "../constants/config";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const [mobile, setMobile] = useState("");
+  const [usernameOrMobile, setUsernameOrMobile] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    const mobileRegex = /^[0-9]{10}$/;
-    if (!mobileRegex.test(mobile)) {
-      Alert.alert("Invalid Input", "Please enter a valid 10-digit mobile number.");
+    const val = usernameOrMobile.trim();
+    if (!val) {
+      Alert.alert("Required Field", "Please enter your username or registered mobile number.");
       return;
     }
 
     setLoading(true);
     try {
       const response = await axios.post(`${CONFIG.API_URL}/forgot-password`, {
-        mobile: mobile.trim(),
+        username_or_mobile: val,
       }, { timeout: 10000 });
+
+      const sentMobile = response.data.mobile;
+      const displayMobile = sentMobile.replace(/.(?=.{4})/g, "*"); // Mask for privacy: e.g. ******1234
 
       Alert.alert(
         "OTP Code Sent",
-        "A password reset OTP has been sent to your mobile number.",
+        `A password reset OTP has been sent to your registered mobile number.\nSent to: ${displayMobile}\nCode: ${response.data.otp} (Autofilled)`,
         [
           {
             text: "Reset Password",
             onPress: () => {
               router.push({
                 pathname: "/reset-password",
-                params: { mobile: mobile.trim(), simulatedOtp: response.data.otp }
+                params: { mobile: sentMobile, simulatedOtp: response.data.otp }
               });
             }
           }
         ]
       );
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || "Mobile number is not registered.";
-      Alert.alert("Error", errorMsg);
+      console.log("Forgot password error:", error);
+      if (error.response?.status === 404) {
+        Alert.alert(
+          "Account Not Found",
+          "Credential given doesn't exist. Please sign up to create a new account.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Sign Up",
+              onPress: () => {
+                router.replace("/signup");
+              }
+            }
+          ]
+        );
+      } else {
+        const errorMsg = error.response?.data?.detail || "Something went wrong. Please try again.";
+        Alert.alert("Error", errorMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -71,23 +91,23 @@ export default function ForgotPasswordScreen() {
             </View>
             <Text style={styles.title}>Forgot Password</Text>
             <Text style={styles.subtitle}>
-              Enter your registered mobile number below. We will send you an OTP to reset your password.
+              Enter your registered username or mobile number below. We will send you an OTP to reset your password.
             </Text>
           </View>
 
           {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputWrapper}>
-              <Text style={styles.label}>Mobile Number</Text>
+              <Text style={styles.label}>Username or Mobile Number</Text>
               <View style={styles.inputContainer}>
-                <Ionicons name="call-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+                <Ionicons name="person-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g., 9876543210"
+                  placeholder="Username or registered mobile"
                   placeholderTextColor={COLORS.textSecondary}
-                  keyboardType="numeric"
-                  value={mobile}
-                  onChangeText={setMobile}
+                  value={usernameOrMobile}
+                  onChangeText={setUsernameOrMobile}
+                  autoCapitalize="none"
                   autoFocus
                 />
               </View>

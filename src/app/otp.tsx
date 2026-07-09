@@ -90,12 +90,16 @@ export default function OTPScreen() {
         // Connect Socket.IO
         SocketService.connect(profileData.user.id, profileData.user.username);
 
+        const hasDetails = !!(profileData.user.first_name && profileData.user.gender);
+
         Alert.alert("Success", "Mobile number verified successfully!", [
           {
             text: "Continue",
             onPress: () => {
               if (role === "owner" || profileData.user.role === "owner") {
                 router.replace("/owner/dashboard");
+              } else if (hasDetails) {
+                router.replace("/(tabs)/home");
               } else {
                 router.replace("/personal-details");
               }
