@@ -74,7 +74,10 @@ export default function ChatRoomScreen() {
     
     try {
       const now = new Date();
-      const gameEnd = new Date(`${roomDetail.game_date}T${roomDetail.end_time}`);
+      const [yr, mo, dy] = roomDetail.game_date.split("-").map(Number);
+      const [hr, min, sec] = roomDetail.end_time.split(":").map(Number);
+      const gameEnd = new Date(yr, mo - 1, dy, hr, min, sec || 0);
+      if (isNaN(gameEnd.getTime())) return false;
       const blockTime = new Date(gameEnd.getTime() + 10 * 60 * 1000);
       return now > blockTime;
     } catch (e) {
