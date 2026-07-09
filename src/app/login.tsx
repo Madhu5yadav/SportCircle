@@ -1,27 +1,27 @@
+import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TextInput, 
-  TouchableOpacity, 
-  SafeAreaView, 
-  ScrollView, 
+import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
-  Modal
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
-import { useRouter } from "expo-router";
 import { useDispatch } from "react-redux";
-import { COLORS, SPACING, SHADOWS } from "../theme/theme";
-import { Ionicons } from "@expo/vector-icons";
-import axios from "axios";
 import { CONFIG } from "../constants/config";
-import { StorageService } from "../services/storage";
 import { setCredentials } from "../redux/authSlice";
 import { SocketService } from "../services/socket";
+import { StorageService } from "../services/storage";
+import { COLORS, SHADOWS, SPACING } from "../theme/theme";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -64,10 +64,10 @@ export default function LoginScreen() {
       }, { timeout: 10000 });
 
       setShowForgotPasswordModal(false);
-      
+
       const sentMobile = response.data.mobile;
       const displayMobile = sentMobile.replace(/.(?=.{4})/g, "*"); // Mask for privacy: e.g. ******1234
-      
+
       Alert.alert(
         "OTP Sent",
         `A login OTP code has been simulated for dev/testing.\nSent to: ${displayMobile}\nCode: ${response.data.otp} (Autofilled)`,
@@ -174,7 +174,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
@@ -223,18 +223,18 @@ export default function LoginScreen() {
                   autoCapitalize="none"
                 />
                 <TouchableOpacity onPress={() => setSecureText(!secureText)}>
-                  <Ionicons 
-                    name={secureText ? "eye-off-outline" : "eye-outline"} 
-                    size={20} 
-                    color={COLORS.textSecondary} 
+                  <Ionicons
+                    name={secureText ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color={COLORS.textSecondary}
                   />
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* Login Button */}
-            <TouchableOpacity 
-              style={[styles.btn, loading ? styles.btnDisabled : null]} 
+            <TouchableOpacity
+              style={[styles.btn, loading ? styles.btnDisabled : null]}
               onPress={handleLogin}
               disabled={loading}
             >
@@ -255,14 +255,6 @@ export default function LoginScreen() {
                 <Text style={styles.footerLinkText}>Register</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Owner Portal Link */}
-            <View style={[styles.footerLink, { marginTop: 12 }]}>
-              <Text style={styles.footerText}>Are you a Turf/Court Owner? </Text>
-              <TouchableOpacity onPress={() => router.push("/owner/login")}>
-                <Text style={styles.footerLinkText}>Owner Portal</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -279,9 +271,9 @@ export default function LoginScreen() {
             {modalMode === "select" ? (
               <>
                 <Text style={styles.modalTitle}>You can either</Text>
-                
-                <TouchableOpacity 
-                  style={styles.modalBtn} 
+
+                <TouchableOpacity
+                  style={styles.modalBtn}
                   onPress={handleLoginWithOtp}
                 >
                   <Text style={styles.modalBtnText}>Login with OTP</Text>
@@ -289,15 +281,15 @@ export default function LoginScreen() {
 
                 <Text style={styles.modalDividerText}>Or</Text>
 
-                <TouchableOpacity 
-                  style={styles.modalBtn} 
+                <TouchableOpacity
+                  style={styles.modalBtn}
                   onPress={handleResetPassword}
                 >
                   <Text style={styles.modalBtnText}>Reset Password</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={styles.modalCancelBtn} 
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
                   onPress={() => setShowForgotPasswordModal(false)}
                 >
                   <Text style={styles.modalCancelBtnText}>Cancel</Text>
@@ -323,8 +315,8 @@ export default function LoginScreen() {
                   />
                 </View>
 
-                <TouchableOpacity 
-                  style={[styles.modalBtn, sendingOtp ? styles.modalBtnDisabled : null]} 
+                <TouchableOpacity
+                  style={[styles.modalBtn, sendingOtp ? styles.modalBtnDisabled : null]}
                   onPress={handleLoginWithOtp}
                   disabled={sendingOtp}
                 >
@@ -335,8 +327,8 @@ export default function LoginScreen() {
                   )}
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                  style={styles.modalCancelBtn} 
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
                   onPress={() => setModalMode("select")}
                   disabled={sendingOtp}
                 >
