@@ -14,7 +14,8 @@ import {
   Alert,
   ScrollView,
   SafeAreaView,
-  Keyboard
+  Keyboard,
+  StatusBar
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
@@ -99,6 +100,14 @@ export default function ChatRoomScreen() {
     } catch (e) {
       return false;
     }
+  };
+
+  const getCleanedGroupName = () => {
+    if (!roomDetail?.name) return `Chat Room #${parsedRoomId}`;
+    if (roomDetail.name.startsWith("Game: ")) {
+      return roomDetail.name.substring(6);
+    }
+    return roomDetail.name;
   };
 
   // Load chat profile and messages
@@ -309,7 +318,7 @@ export default function ChatRoomScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { backgroundColor: COLORS.surface }]}>
       {/* Header bar */}
       <View style={styles.chatHeader}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -318,7 +327,7 @@ export default function ChatRoomScreen() {
         
         <View style={styles.headerInfo}>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            {roomDetail?.name || `Chat Room #${parsedRoomId}`}
+            {getCleanedGroupName()}
           </Text>
           <Text style={styles.headerSub}>
             {typingUsers.length > 0 
@@ -677,22 +686,22 @@ export default function ChatRoomScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface,
   },
   chatHeader: {
     flexDirection: "row",
-    height: Platform.OS === "ios" ? 90 : 64,
+    height: Platform.OS === "ios" ? 90 : (StatusBar.currentHeight || 24) + 54,
     backgroundColor: COLORS.surface,
     borderBottomWidth: 1.5,
     borderBottomColor: COLORS.border,
-    paddingTop: Platform.OS === "ios" ? 44 : 10,
+    paddingTop: Platform.OS === "ios" ? 44 : (StatusBar.currentHeight || 24) + 10,
     alignItems: "center",
     paddingHorizontal: SPACING.md,
     justifyContent: "space-between",
@@ -949,7 +958,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderTopWidth: 1.5,
     borderTopColor: COLORS.border,
     alignItems: "center",
@@ -960,11 +969,11 @@ const styles = StyleSheet.create({
   chatInput: {
     flex: 1,
     backgroundColor: COLORS.background,
-    borderRadius: 20,
+    borderRadius: 23,
     paddingLeft: 16,
     paddingRight: 16,
     paddingVertical: 0,
-    height: 40,
+    height: 46,
     fontFamily: "Poppins_400Regular",
     fontSize: 14,
     color: COLORS.textPrimary,
@@ -974,9 +983,9 @@ const styles = StyleSheet.create({
     textAlignVertical: "center",
   },
   sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
