@@ -18,7 +18,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { COLORS, SPACING, SHADOWS } from "../../theme/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { RootState } from "../../redux/store";
-import { setCredentials } from "../../redux/authSlice";
+import { logout } from "../../redux/authSlice";
 import { StorageService } from "../../services/storage";
 import api from "../../services/api";
 
@@ -60,16 +60,8 @@ export default function OwnerDashboardScreen() {
         text: "Logout",
         style: "destructive",
         onPress: async () => {
-          await StorageService.clearTokens();
-          dispatch(
-            setCredentials({
-              user: null,
-              token: null,
-              refreshToken: null,
-              wallet: null,
-              settings: null,
-            })
-          );
+          await StorageService.clearAll();
+          dispatch(logout());
           router.replace("/owner/login");
         }
       }
