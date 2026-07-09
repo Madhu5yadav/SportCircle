@@ -335,7 +335,7 @@ export default function ChatRoomScreen() {
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "padding"}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 60}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         {/* Messages list */}
         {loading && messages.length === 0 ? (
