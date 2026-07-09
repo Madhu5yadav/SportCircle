@@ -171,7 +171,8 @@ export default function PersonalDetailsScreen() {
         { text: "🖼️  Choose from Gallery", onPress: () => pickImage("gallery") },
         ...(profileImage ? [{ text: "🗑️  Remove Photo", onPress: () => setProfileImage(null), style: "destructive" as const }] : []),
         { text: "Cancel", style: "cancel" as const },
-      ]
+      ],
+      { cancelable: true }
     );
   };
 

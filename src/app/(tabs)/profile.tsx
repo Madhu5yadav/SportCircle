@@ -7,20 +7,20 @@ import {
   TouchableOpacity, 
   ScrollView, 
   TextInput, 
-  Switch, 
   ActivityIndicator,
   Alert,
   Modal,
-  FlatList
+  SafeAreaView,
+  StatusBar
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from "../../theme/theme";
+import { Ionicons } from "@expo/vector-icons";
+import { COLORS, SPACING, SHADOWS } from "../../theme/theme";
 import { RootState } from "../../redux/store";
 import api from "../../services/api";
 import { StorageService } from "../../services/storage";
-import { logout, updateUser, updateWallet, updateSettings } from "../../redux/authSlice";
+import { logout, updateWallet } from "../../redux/authSlice";
 import { SocketService } from "../../services/socket";
 
 export default function ProfileScreen() {
@@ -29,59 +29,42 @@ export default function ProfileScreen() {
   const auth = useSelector((state: RootState) => state.auth);
 
   // States
-  const [editing, setEditing] = useState(false);
-  const [firstName, setFirstName] = useState(auth.user?.first_name || "");
-  const [lastName, setLastName] = useState(auth.user?.last_name || "");
-  const [aboutText, setAboutText] = useState(auth.user?.about || "");
-  
-  const [depositAmount, setDepositAmount] = useState("");
-  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [preferredSports, setPreferredSports] = useState<string[]>([]);
+  const [playingTime, setPlayingTime] = useState<string[]>([]);
   const [txHistory, setTxHistory] = useState<any[]>([]);
-
+  const [games, setGames] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [depositLoading, setDepositLoading] = useState(false);
+  const [depositAmount, setDepositAmount] = useState("");
+  
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showGameHistoryModal, setShowGameHistoryModal] = useState(false);
+  const [showPaymentHistoryModal, setShowPaymentHistoryModal] = useState(false);
+  const [showSupportModal, setShowSupportModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
-  const fetchWalletTransactions = async () => {
-    try {
-      const res = await api.get("/profile/payments");
-      setTxHistory(res.data);
-    } catch (err) {
-      console.log("Error loading transaction ledger:", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchWalletTransactions();
-  }, []);
-
-  const handleUpdateProfile = async () => {
-    if (!firstName.trim() || !lastName.trim()) {
-      Alert.alert("Error", "Names cannot be empty.");
-      return;
-    }
-
+  const fetchProfileData = async () => {
     setLoading(true);
     try {
-      await api.put("/profile", {
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        about: aboutText.trim(),
-      });
+      const res = await api.get("/profile");
+      setPreferredSports(res.data.preferred_sports || []);
+      setPlayingTime(res.data.playing_time || []);
+      
+      const txs = await api.get("/profile/payments");
+      setTxHistory(txs.data);
 
-      dispatch(updateUser({
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        about: aboutText.trim()
-      }));
-
-      setEditing(false);
-      Alert.alert("Success", "Profile updated successfully!");
+      const gamesRes = await api.get("/games");
+      setGames(gamesRes.data || []);
     } catch (err) {
-      Alert.alert("Error", "Failed to update profile details.");
+      console.log("Error loading profile screen details:", err);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchProfileData();
+  }, []);
 
   const handleDepositMoney = async () => {
     const amt = parseFloat(depositAmount);
@@ -90,41 +73,18 @@ export default function ProfileScreen() {
       return;
     }
 
-    setDepositLoading(true);
+    setLoading(true);
     try {
-      const res = await api.post("/profile/wallet/deposit", {
-        amount: amt
-      });
+      const res = await api.post("/profile/wallet/deposit", { amount: amt });
       dispatch(updateWallet(parseFloat(res.data.balance)));
       Alert.alert("Success", `Rs. ${amt} has been successfully added to your wallet!`);
       setDepositAmount("");
       setShowWalletModal(false);
-      fetchWalletTransactions();
+      fetchProfileData();
     } catch (err) {
       Alert.alert("Error", "Could not complete transaction.");
     } finally {
-      setDepositLoading(false);
-    }
-  };
-
-  const handleToggleSettings = async (field: "push" | "email" | "dark") => {
-    if (!auth.settings) return;
-    
-    const payload = {
-      push_enabled: field === "push" ? !auth.settings.push_enabled : auth.settings.push_enabled,
-      email_enabled: field === "email" ? !auth.settings.email_enabled : auth.settings.email_enabled,
-      dark_mode: field === "dark" ? !auth.settings.dark_mode : auth.settings.dark_mode
-    };
-
-    try {
-      await api.put("/profile/settings", payload);
-      dispatch(updateSettings({
-        push_enabled: payload.push_enabled,
-        email_enabled: payload.email_enabled,
-        dark_mode: payload.dark_mode
-      }));
-    } catch (err) {
-      console.log("Error updating settings:", err);
+      setLoading(false);
     }
   };
 
@@ -137,8 +97,7 @@ export default function ProfileScreen() {
         onPress: async () => {
           try {
             await api.post("/logout");
-          } catch (e) {} // Fail silently if token already invalid
-          
+          } catch (e) {}
           await StorageService.clearAll();
           SocketService.disconnect();
           dispatch(logout());
@@ -148,173 +107,310 @@ export default function ProfileScreen() {
     ]);
   };
 
+  // Filter games the user is participating in or hosting
+  const userGames = games.filter((g: any) => g.is_joined || g.host_id === auth.user?.id);
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-      {/* Profile Card details */}
-      <View style={styles.profileCard}>
-        <Image 
-          source={{ uri: auth.user?.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250" }} 
-          style={styles.avatar} 
-        />
-        
-        {editing ? (
-          <View style={styles.editForm}>
-            <TextInput
-              style={styles.editInput}
-              placeholder="First Name"
-              value={firstName}
-              onChangeText={setFirstName}
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#1E6AF7" />
+      
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {/* 1. Curved Blue Top Header Background (Moves with scroll) */}
+        <View style={styles.headerBackground}>
+          <Text style={styles.headerUsername}>@{auth.user?.username || "UserName"}</Text>
+        </View>
+
+        {/* 2. Overlapping Light Blue Profile Card */}
+        <View style={styles.profileCard}>
+          {/* Circular Avatar + Details Column */}
+          <View style={styles.profileHeaderRow}>
+            <Image 
+              source={{ uri: auth.user?.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250" }} 
+              style={styles.avatar} 
             />
-            <TextInput
-              style={styles.editInput}
-              placeholder="Last Name"
-              value={lastName}
-              onChangeText={setLastName}
-            />
-            <TextInput
-              style={[styles.editInput, { height: 60 }]}
-              placeholder="About / Bio"
-              multiline
-              value={aboutText}
-              onChangeText={setAboutText}
-            />
-            <View style={styles.editActions}>
-              <TouchableOpacity style={styles.editCancelBtn} onPress={() => setEditing(false)}>
-                <Text style={styles.editCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.editSaveBtn} onPress={handleUpdateProfile}>
-                {loading ? <ActivityIndicator size="small" color={COLORS.surface} /> : <Text style={styles.editSaveText}>Save</Text>}
-              </TouchableOpacity>
+            <View style={styles.detailsColumn}>
+              <Text style={styles.fullName}>{auth.user?.first_name} {auth.user?.last_name}</Text>
+              <Text style={styles.infoText}>{auth.user?.mobile}</Text>
+              <Text style={styles.infoText}>{auth.user?.gender || "Gender not set"}</Text>
+              <Text style={styles.bioText} numberOfLines={2}>{auth.user?.about || "Tennis & cricket player. Host games to invite me!"}</Text>
             </View>
           </View>
-        ) : (
-          <View style={styles.infoWrapper}>
-            <Text style={styles.fullName}>{auth.user?.first_name} {auth.user?.last_name}</Text>
-            <Text style={styles.username}>@{auth.user?.username}</Text>
-            <Text style={styles.mobile}>{auth.user?.mobile}</Text>
-            <Text style={styles.bio}>{auth.user?.about || "Tennis & cricket player. Host games to invite me!"}</Text>
-            <TouchableOpacity style={styles.editToggleBtn} onPress={() => setEditing(true)}>
-              <Ionicons name="create-outline" size={14} color={COLORS.primary} />
-              <Text style={styles.editToggleText}> Edit Profile</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
 
-      {/* Wallet Widget */}
-      <View style={styles.walletCard}>
-        <View style={styles.walletHeader}>
-          <View>
-            <Text style={styles.walletTitle}>SportCircle Wallet</Text>
-            <Text style={styles.walletBalance}>Rs. {auth.wallet?.balance.toFixed(2) || "0.00"}</Text>
+          {/* White Matches & Trust Score Card */}
+          <View style={styles.statsCard}>
+            <View style={styles.statColumn}>
+              <Text style={styles.statLabel}>Total Matches</Text>
+              <View style={styles.statValueRow}>
+                <Ionicons name="football" size={16} color={COLORS.primary} />
+                <Text style={styles.statValue}>{userGames.length || 10}</Text>
+              </View>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statColumn}>
+              <Text style={styles.statLabel}>Trust Score</Text>
+              <View style={styles.statValueRow}>
+                <Ionicons name="star" size={16} color="#FFD700" />
+                <Text style={styles.statValue}>3/5</Text>
+              </View>
+            </View>
           </View>
-          <TouchableOpacity style={styles.addCashBtn} onPress={() => setShowWalletModal(true)}>
-            <Ionicons name="add" size={16} color={COLORS.surface} />
-            <Text style={styles.addCashBtnText}>Add Funds</Text>
+
+          {/* Preferred Sports */}
+          <Text style={styles.cardSectionTitle}>Preferred Sports</Text>
+          <View style={styles.badgeContainer}>
+            {preferredSports.length === 0 ? (
+              <Text style={styles.emptyText}>No preferred sports added yet</Text>
+            ) : (
+              preferredSports.map((sport, index) => (
+                <View key={index} style={styles.pillBadge}>
+                  <Text style={styles.pillText}>{sport}</Text>
+                </View>
+              ))
+            )}
+          </View>
+
+          {/* Preferred Play time */}
+          <Text style={styles.cardSectionTitle}>Preferred Play time</Text>
+          <View style={styles.badgeContainer}>
+            {playingTime.length === 0 ? (
+              <Text style={styles.emptyText}>No play times set</Text>
+            ) : (
+              playingTime.map((time, index) => (
+                <View key={index} style={styles.pillBadge}>
+                  <Text style={styles.pillText}>{time}</Text>
+                </View>
+              ))
+            )}
+          </View>
+        </View>
+
+        {/* 3. List of Options matching Figma design */}
+        <View style={styles.optionsList}>
+          {/* Edit Profile */}
+          <TouchableOpacity style={styles.optionRow} onPress={() => router.push("/personal-details")}>
+            <Text style={styles.optionText}>Edit Profile</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+
+          {/* Wallet */}
+          <TouchableOpacity style={styles.optionRow} onPress={() => setShowWalletModal(true)}>
+            <Text style={styles.optionText}>wallet</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+
+          {/* Game History */}
+          <TouchableOpacity style={styles.optionRow} onPress={() => setShowGameHistoryModal(true)}>
+            <Text style={styles.optionText}>Game History</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+
+          {/* Payment History */}
+          <TouchableOpacity style={styles.optionRow} onPress={() => setShowPaymentHistoryModal(true)}>
+            <Text style={styles.optionText}>Payment History</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+
+          {/* Account Settings */}
+          <TouchableOpacity style={styles.optionRow} onPress={() => setShowSettingsModal(true)}>
+            <Text style={styles.optionText}>Account Settings</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+
+          {/* Privacy Policy */}
+          <TouchableOpacity style={styles.optionRow} onPress={() => setShowPrivacyModal(true)}>
+            <Text style={styles.optionText}>Privacy Policy</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+
+          {/* Help & Support */}
+          <TouchableOpacity style={styles.optionRow} onPress={() => setShowSupportModal(true)}>
+            <Text style={styles.optionText}>Help & Support</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
+          </TouchableOpacity>
+
+          {/* Logout */}
+          <TouchableOpacity style={styles.optionRow} onPress={handleLogout}>
+            <Text style={styles.optionText}>Logout</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
+      </ScrollView>
 
-        <Text style={styles.txTitle}>Recent Transactions</Text>
-        {txHistory.slice(0, 3).map((tx) => (
-          <View key={tx.id} style={styles.txItem}>
-            <View>
-              <Text style={styles.txDesc} numberOfLines={1}>{tx.description}</Text>
-              <Text style={styles.txDate}>{new Date(tx.created_at).toLocaleDateString()}</Text>
+      {/* WALLET MODAL */}
+      <Modal visible={showWalletModal} transparent animationType="slide" onRequestClose={() => setShowWalletModal(false)}>
+        <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={() => setShowWalletModal(false)}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>SportCircle Wallet</Text>
+              <TouchableOpacity onPress={() => setShowWalletModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
             </View>
-            <Text style={[styles.txAmt, tx.type === "credit" ? styles.txCredit : styles.txDebit]}>
-              {tx.type === "credit" ? "+" : "-"} Rs.{tx.amount}
-            </Text>
-          </View>
-        ))}
-      </View>
 
-      {/* App Settings toggles */}
-      <View style={styles.settingsSection}>
-        <Text style={styles.sectionTitle}>Account Settings</Text>
-        
-        <View style={styles.settingItem}>
-          <View style={styles.settingLabelRow}>
-            <Ionicons name="notifications-outline" size={20} color={COLORS.textPrimary} />
-            <Text style={styles.settingText}>Push Notifications</Text>
-          </View>
-          <Switch
-            value={auth.settings?.push_enabled ?? true}
-            onValueChange={() => handleToggleSettings("push")}
-            trackColor={{ false: COLORS.cardBackground, true: COLORS.primary }}
-          />
-        </View>
+            <View style={styles.walletBalanceCard}>
+              <Text style={styles.balanceLabel}>Current Balance</Text>
+              <Text style={styles.balanceVal}>Rs. {auth.wallet?.balance.toFixed(2) || "0.00"}</Text>
+            </View>
 
-        <View style={styles.settingItem}>
-          <View style={styles.settingLabelRow}>
-            <Ionicons name="mail-outline" size={20} color={COLORS.textPrimary} />
-            <Text style={styles.settingText}>Email Alerts</Text>
-          </View>
-          <Switch
-            value={auth.settings?.email_enabled ?? true}
-            onValueChange={() => handleToggleSettings("email")}
-            trackColor={{ false: COLORS.cardBackground, true: COLORS.primary }}
-          />
-        </View>
-
-        <View style={styles.settingItem}>
-          <View style={styles.settingLabelRow}>
-            <Ionicons name="moon-outline" size={20} color={COLORS.textPrimary} />
-            <Text style={styles.settingText}>Dark Mode Ready</Text>
-          </View>
-          <Switch
-            value={auth.settings?.dark_mode ?? false}
-            onValueChange={() => handleToggleSettings("dark")}
-            trackColor={{ false: COLORS.cardBackground, true: COLORS.primary }}
-          />
-        </View>
-      </View>
-
-      {/* Support and Safety links */}
-      <View style={styles.settingsSection}>
-        <Text style={styles.sectionTitle}>Help & Privacy</Text>
-        <TouchableOpacity style={styles.navRow}>
-          <Text style={styles.navRowText}>Privacy Policy</Text>
-          <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navRow}>
-          <Text style={styles.navRowText}>Help & Support</Text>
-          <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Logout button */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Ionicons name="log-out-outline" size={20} color={COLORS.surface} />
-        <Text style={styles.logoutBtnText}>Logout</Text>
-      </TouchableOpacity>
-
-      {/* WALLET DEPOSIT MODAL */}
-      <Modal visible={showWalletModal} transparent animationType="slide">
-        <View style={styles.modalBg}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Money to Wallet</Text>
-            <Text style={styles.modalLabel}>Enter Deposit Amount (Rs.)</Text>
+            <Text style={styles.inputLabel}>Add Cash (Rs.)</Text>
             <TextInput
               style={styles.modalInput}
               placeholder="e.g. 500"
               keyboardType="numeric"
               value={depositAmount}
               onChangeText={setDepositAmount}
-              autoFocus
             />
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancel} onPress={() => setShowWalletModal(false)}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSubmit} onPress={handleDepositMoney} disabled={depositLoading}>
-                {depositLoading ? <ActivityIndicator size="small" color={COLORS.surface} /> : <Text style={styles.submitText}>Add Money</Text>}
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.modalActionBtn} onPress={handleDepositMoney}>
+              <Text style={styles.modalActionText}>Add Funds</Text>
+            </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
-    </ScrollView>
+      {/* GAME HISTORY MODAL */}
+      <Modal visible={showGameHistoryModal} transparent animationType="slide" onRequestClose={() => setShowGameHistoryModal(false)}>
+        <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={() => setShowGameHistoryModal(false)}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Game History</Text>
+              <TouchableOpacity onPress={() => setShowGameHistoryModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 400 }}>
+              {userGames.length === 0 ? (
+                <Text style={styles.emptyText}>No games hosted or joined yet.</Text>
+              ) : (
+                userGames.map((g) => {
+                  const gameDate = new Date(g.game_date);
+                  const isPast = gameDate < new Date();
+                  return (
+                    <View key={g.id} style={styles.historyCard}>
+                      <View style={styles.historyHeader}>
+                        <View style={styles.sportBadge}>
+                          <Text style={styles.sportText}>{g.sport_type}</Text>
+                        </View>
+                        <Text style={[styles.statusBadge, isPast ? styles.pastStatus : styles.upcomingStatus]}>
+                          {isPast ? "Played" : "Upcoming"}
+                        </Text>
+                      </View>
+                      <Text style={styles.historyName}>{g.name}</Text>
+                      <Text style={styles.historyLoc}>
+                        <Ionicons name="location-outline" size={12} color={COLORS.textSecondary} /> {g.location}
+                      </Text>
+                      <Text style={styles.historyDate}>
+                        <Ionicons name="calendar-outline" size={12} color={COLORS.textSecondary} /> {g.game_date} @ {g.start_time.slice(0, 5)}
+                      </Text>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* PAYMENT HISTORY MODAL */}
+      <Modal visible={showPaymentHistoryModal} transparent animationType="slide" onRequestClose={() => setShowPaymentHistoryModal(false)}>
+        <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={() => setShowPaymentHistoryModal(false)}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Payment History</Text>
+              <TouchableOpacity onPress={() => setShowPaymentHistoryModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 400 }}>
+              {txHistory.length === 0 ? (
+                <Text style={styles.emptyText}>No recent transactions</Text>
+              ) : (
+                txHistory.map((tx) => (
+                  <View key={tx.id} style={styles.txItem}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.txDesc} numberOfLines={1}>{tx.description}</Text>
+                      <Text style={styles.txDate}>{new Date(tx.created_at).toLocaleDateString()}</Text>
+                    </View>
+                    <Text style={[styles.txAmt, tx.type === "credit" ? styles.txCredit : styles.txDebit]}>
+                      {tx.type === "credit" ? "+" : "-"} Rs.{tx.amount}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ACCOUNT SETTINGS MODAL */}
+      <Modal visible={showSettingsModal} transparent animationType="slide" onRequestClose={() => setShowSettingsModal(false)}>
+        <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={() => setShowSettingsModal(false)}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Account Settings</Text>
+              <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.modalListItem} onPress={() => { setShowSettingsModal(false); router.push("/reset-password"); }}>
+              <Ionicons name="key-outline" size={20} color={COLORS.primary} style={{ marginRight: 12 }} />
+              <Text style={styles.modalListText}>Change Password</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalListItem} onPress={() => { setShowSettingsModal(false); router.push("/personal-details"); }}>
+              <Ionicons name="create-outline" size={20} color={COLORS.primary} style={{ marginRight: 12 }} />
+              <Text style={styles.modalListText}>Update Profile Details</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* PRIVACY POLICY MODAL */}
+      <Modal visible={showPrivacyModal} transparent animationType="slide" onRequestClose={() => setShowPrivacyModal(false)}>
+        <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={() => setShowPrivacyModal(false)}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Privacy Policy</Text>
+              <TouchableOpacity onPress={() => setShowPrivacyModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 300 }}>
+              <Text style={styles.policyText}>
+                At SportCircle, we take your privacy seriously. We only gather and process information required to offer sports matching and turf bookings near you.
+                {"\n\n"}
+                We do not sell your personal data or contact details to third parties. GPS location details are exclusively used to discover local sporting venues and active matches.
+              </Text>
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* HELP & SUPPORT MODAL */}
+      <Modal visible={showSupportModal} transparent animationType="slide" onRequestClose={() => setShowSupportModal(false)}>
+        <TouchableOpacity style={styles.modalBg} activeOpacity={1} onPress={() => setShowSupportModal(false)}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Help & Support</Text>
+              <TouchableOpacity onPress={() => setShowSupportModal(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.supportLabel}>Have queries or need booking assistance?</Text>
+            <View style={styles.supportRow}>
+              <Ionicons name="mail" size={20} color={COLORS.primary} />
+              <Text style={styles.supportValue}>support@sportcircle.com</Text>
+            </View>
+            <View style={styles.supportRow}>
+              <Ionicons name="call" size={20} color={COLORS.primary} />
+              <Text style={styles.supportValue}>+91 98765 43210</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </SafeAreaView>
   );
 }
 
@@ -324,164 +420,247 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   scrollContent: {
-    padding: SPACING.xl,
     paddingBottom: 40,
   },
+  headerBackground: {
+    backgroundColor: "#1E6AF7",
+    height: 160,
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 10,
+    ...SHADOWS.medium,
+  },
+  headerUsername: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 22,
+    color: COLORS.surface,
+  },
   profileCard: {
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.border,
-    borderWidth: 1.5,
+    backgroundColor: "#D5E5FD",
     borderRadius: 24,
+    marginHorizontal: SPACING.xl,
+    marginTop: -40, // Overlaps the blue header curve
     padding: SPACING.xl,
+    borderWidth: 1,
+    borderColor: "#B1CEFC",
+    ...SHADOWS.medium,
+  },
+  profileHeaderRow: {
+    flexDirection: "row",
     alignItems: "center",
     marginBottom: SPACING.lg,
-    ...SHADOWS.soft,
   },
   avatar: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    marginBottom: SPACING.md,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.surface,
   },
-  infoWrapper: {
-    alignItems: "center",
+  detailsColumn: {
+    flex: 1,
+    marginLeft: SPACING.md,
   },
   fullName: {
     fontFamily: "Poppins_700Bold",
     fontSize: 18,
     color: COLORS.textPrimary,
   },
-  username: {
+  infoText: {
     fontFamily: "Poppins_500Medium",
     fontSize: 13,
-    color: COLORS.primary,
-    marginTop: 2,
+    color: COLORS.textSecondary,
+    marginTop: 1,
   },
-  mobile: {
+  bioText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  statsCard: {
+    flexDirection: "row",
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    paddingVertical: SPACING.md,
+    marginBottom: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.soft,
+  },
+  statColumn: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statLabel: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  statValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  statValue: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginLeft: 4,
+  },
+  statDivider: {
+    width: 1.5,
+    height: "100%",
+    backgroundColor: COLORS.border,
+  },
+  cardSectionTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginTop: SPACING.sm,
+    marginBottom: 8,
+  },
+  badgeContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: SPACING.md,
+  },
+  pillBadge: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    ...SHADOWS.soft,
+  },
+  pillText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: COLORS.textPrimary,
+  },
+  emptyText: {
     fontFamily: "Poppins_400Regular",
     fontSize: 12,
     color: COLORS.textSecondary,
-    marginTop: 2,
+    fontStyle: "italic",
   },
-  bio: {
-    fontFamily: "Poppins_400Regular",
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-    marginTop: 10,
-    lineHeight: 20,
+  optionsList: {
+    marginHorizontal: SPACING.xl,
+    marginTop: 24,
+    gap: 12,
   },
-  editToggleBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.background,
-    borderColor: COLORS.primary,
-    borderWidth: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginTop: 12,
-  },
-  editToggleText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 11,
-    color: COLORS.primary,
-  },
-  editForm: {
-    width: "100%",
-    gap: 10,
-  },
-  editInput: {
-    backgroundColor: COLORS.background,
-    borderColor: COLORS.border,
-    borderWidth: 1.5,
-    borderRadius: 12,
-    height: 44,
-    paddingHorizontal: 12,
-    fontFamily: "Poppins_400Regular",
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  editActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 10,
-    marginTop: 6,
-  },
-  editCancelBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: COLORS.background,
-  },
-  editCancelText: {
-    fontFamily: "Poppins_600SemiBold",
-    color: COLORS.textSecondary,
-  },
-  editSaveBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
-  },
-  editSaveText: {
-    fontFamily: "Poppins_600SemiBold",
-    color: COLORS.surface,
-  },
-  walletCard: {
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.border,
-    borderWidth: 1.5,
-    borderRadius: 24,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    ...SHADOWS.soft,
-  },
-  walletHeader: {
+  optionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    paddingBottom: 12,
-    marginBottom: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.lg,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    ...SHADOWS.soft,
   },
-  walletTitle: {
+  optionText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+  modalBg: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.lg,
+    paddingBottom: 40,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    ...SHADOWS.medium,
+  },
+  modalHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottomWidth: 1.5,
+    borderBottomColor: COLORS.background,
+    paddingBottom: 12,
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 18,
+    color: COLORS.textPrimary,
+  },
+  walletBalanceCard: {
+    backgroundColor: COLORS.primary + "12",
+    borderRadius: 16,
+    padding: SPACING.lg,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  balanceLabel: {
     fontFamily: "Poppins_500Medium",
     fontSize: 13,
-    color: COLORS.textSecondary,
+    color: COLORS.primary,
   },
-  walletBalance: {
+  balanceVal: {
     fontFamily: "Poppins_700Bold",
     fontSize: 22,
     color: COLORS.primary,
-    marginTop: 2,
+    marginTop: 4,
   },
-  addCashBtn: {
-    flexDirection: "row",
-    backgroundColor: COLORS.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  addCashBtnText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 12,
-    color: COLORS.surface,
-    marginLeft: 2,
-  },
-  txTitle: {
-    fontFamily: "Poppins_600SemiBold",
+  inputLabel: {
+    fontFamily: "Poppins_500Medium",
     fontSize: 13,
     color: COLORS.textPrimary,
-    marginBottom: 10,
+    marginBottom: 6,
+  },
+  modalInput: {
+    backgroundColor: COLORS.background,
+    borderColor: COLORS.border,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    height: 52,
+    paddingHorizontal: 16,
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginBottom: 16,
+  },
+  modalActionBtn: {
+    backgroundColor: COLORS.primary,
+    height: 52,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+    ...SHADOWS.soft,
+  },
+  modalActionText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: COLORS.surface,
+  },
+  txTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    marginBottom: 12,
   },
   txItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.background,
   },
@@ -489,7 +668,6 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_500Medium",
     fontSize: 13,
     color: COLORS.textPrimary,
-    maxWidth: 180,
   },
   txDate: {
     fontFamily: "Poppins_400Regular",
@@ -499,7 +677,7 @@ const styles = StyleSheet.create({
   },
   txAmt: {
     fontFamily: "Poppins_700Bold",
-    fontSize: 13,
+    fontSize: 14,
   },
   txCredit: {
     color: COLORS.success,
@@ -507,133 +685,96 @@ const styles = StyleSheet.create({
   txDebit: {
     color: COLORS.error,
   },
-  settingsSection: {
-    backgroundColor: COLORS.surface,
-    borderColor: COLORS.border,
-    borderWidth: 1.5,
-    borderRadius: 24,
-    padding: SPACING.lg,
-    marginBottom: SPACING.lg,
-    ...SHADOWS.soft,
+  modalListItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.background,
   },
-  sectionTitle: {
-    fontFamily: "Poppins_700Bold",
+  modalListText: {
+    fontFamily: "Poppins_600SemiBold",
     fontSize: 14,
     color: COLORS.textPrimary,
-    marginBottom: 14,
   },
-  settingItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.background,
+  policyText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
   },
-  settingLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  settingText: {
+  supportLabel: {
     fontFamily: "Poppins_500Medium",
     fontSize: 13,
-    color: COLORS.textPrimary,
-  },
-  navRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.background,
-  },
-  navRowText: {
-    fontFamily: "Poppins_500Medium",
-    fontSize: 13,
-    color: COLORS.textPrimary,
-  },
-  logoutBtn: {
-    flexDirection: "row",
-    backgroundColor: COLORS.error,
-    height: 54,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: SPACING.sm,
-    ...SHADOWS.medium,
-  },
-  logoutBtnText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 16,
-    color: COLORS.surface,
-  },
-  modalBg: {
-    flex: 1,
-    backgroundColor: "rgba(26,26,26,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: SPACING.xl,
-  },
-  modalContent: {
-    width: "100%",
-    backgroundColor: COLORS.surface,
-    borderRadius: 24,
-    padding: SPACING.xl,
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    ...SHADOWS.medium,
-  },
-  modalTitle: {
-    fontFamily: "Poppins_700Bold",
-    fontSize: 20,
-    color: COLORS.textPrimary,
+    color: COLORS.textSecondary,
     marginBottom: 16,
   },
-  modalLabel: {
-    fontFamily: "Poppins_500Medium",
-    fontSize: 13,
-    color: COLORS.textPrimary,
-    marginBottom: 6,
-  },
-  modalInput: {
-    backgroundColor: COLORS.background,
-    borderColor: COLORS.border,
-    borderWidth: 1,
-    borderRadius: 12,
-    height: 46,
-    paddingHorizontal: 12,
-    fontFamily: "Poppins_400Regular",
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    marginBottom: 20,
-  },
-  modalActions: {
+  supportRow: {
     flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 10,
+    alignItems: "center",
+    marginBottom: 12,
   },
-  modalCancel: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
+  supportValue: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginLeft: 12,
+  },
+  historyCard: {
     backgroundColor: COLORS.background,
+    borderRadius: 16,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  cancelText: {
+  historyHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  sportBadge: {
+    backgroundColor: COLORS.primary + "12",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  sportText: {
     fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: COLORS.primary,
+  },
+  statusBadge: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  pastStatus: {
+    backgroundColor: COLORS.border,
     color: COLORS.textSecondary,
-    fontSize: 14,
   },
-  modalSubmit: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    backgroundColor: COLORS.primary,
+  upcomingStatus: {
+    backgroundColor: COLORS.success + "15",
+    color: COLORS.success,
   },
-  submitText: {
-    fontFamily: "Poppins_600SemiBold",
-    color: COLORS.surface,
+  historyName: {
+    fontFamily: "Poppins_700Bold",
     fontSize: 14,
+    color: COLORS.textPrimary,
+    marginTop: 8,
+  },
+  historyLoc: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 4,
+  },
+  historyDate: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 4,
   },
 });

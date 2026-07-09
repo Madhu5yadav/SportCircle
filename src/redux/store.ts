@@ -3,6 +3,7 @@ import authReducer from "./authSlice";
 import gameReducer from "./gameSlice";
 import chatReducer from "./chatSlice";
 import friendReducer from "./friendSlice";
+import notificationReducer from "./notificationSlice";
 
 export const store = configureStore({
   reducer: {
@@ -10,6 +11,7 @@ export const store = configureStore({
     game: gameReducer,
     chat: chatReducer,
     friend: friendReducer,
+    notification: notificationReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

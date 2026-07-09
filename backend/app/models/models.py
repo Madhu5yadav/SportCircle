@@ -18,6 +18,7 @@ class User(Base):
     longitude = Column(Double, default=None)
     about = Column(Text, default=None)
     profile_pic = Column(Text, default=None)
+    role = Column(String(20), default="player")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -135,8 +136,11 @@ class Venue(Base):
     rating = Column(Float, default=4.0)
     price_per_hour = Column(DECIMAL(10, 2), nullable=False)
     image_url = Column(String(255), default=None)
-
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    offer_details = Column(String(255), default=None)
+ 
     bookings = relationship("Booking", back_populates="venue", cascade="all, delete-orphan")
+    owner = relationship("User")
 
 
 class Booking(Base):

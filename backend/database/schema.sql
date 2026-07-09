@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
     longitude DOUBLE DEFAULT NULL,
     about TEXT DEFAULT NULL,
     profile_pic VARCHAR(255) DEFAULT NULL,
+    role VARCHAR(20) DEFAULT 'player',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -114,7 +115,10 @@ CREATE TABLE IF NOT EXISTS venues (
     facilities TEXT DEFAULT NULL, -- comma separated, e.g., "Parking, Washroom, Drinking Water"
     rating FLOAT DEFAULT 4.0,
     price_per_hour DECIMAL(10,2) NOT NULL,
-    image_url VARCHAR(255) DEFAULT NULL
+    image_url VARCHAR(255) DEFAULT NULL,
+    owner_id INT DEFAULT NULL,
+    offer_details VARCHAR(255) DEFAULT NULL,
+    FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- 10. bookings

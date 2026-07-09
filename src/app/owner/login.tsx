@@ -7,22 +7,22 @@ import {
   TouchableOpacity, 
   SafeAreaView, 
   ScrollView, 
-  ActivityIndicator,
+  ActivityIndicator, 
   Alert,
   KeyboardAvoidingView,
   Platform
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useDispatch } from "react-redux";
-import { COLORS, SPACING, SHADOWS } from "../theme/theme";
+import { COLORS, SPACING, SHADOWS } from "../../theme/theme";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
-import { CONFIG } from "../constants/config";
-import { StorageService } from "../services/storage";
-import { setCredentials } from "../redux/authSlice";
-import { SocketService } from "../services/socket";
+import { CONFIG } from "../../constants/config";
+import { StorageService } from "../../services/storage";
+import { setCredentials } from "../../redux/authSlice";
+import { SocketService } from "../../services/socket";
 
-export default function LoginScreen() {
+export default function OwnerLoginScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
 
@@ -33,13 +33,13 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!usernameOrMobile.trim() || !password.trim()) {
-      Alert.alert("Required Fields", "Please enter your username/mobile and password.");
+      Alert.alert("Required Fields", "Please enter your credentials.");
       return;
     }
 
     setLoading(true);
     try {
-      // 1. Authenticate with credentials
+      // 1. Authenticate
       const response = await axios.post(`${CONFIG.API_URL}/login`, {
         username_or_mobile: usernameOrMobile.trim(),
         password: password,
@@ -47,11 +47,11 @@ export default function LoginScreen() {
 
       const { access_token, refresh_token } = response.data;
 
-      // 2. Securely store Access & Refresh tokens
+      // 2. Store tokens
       await StorageService.setAccessToken(access_token);
       await StorageService.setRefreshToken(refresh_token);
 
-      // 3. Fetch User profile details
+      // 3. Fetch Profile details
       const profileRes = await axios.get(`${CONFIG.API_URL}/profile`, {
         headers: { Authorization: `Bearer ${access_token}` },
         timeout: 10000
@@ -73,15 +73,10 @@ export default function LoginScreen() {
       // 5. Connect Socket.IO
       SocketService.connect(profileData.user.id, profileData.user.username);
 
-      // 6. Navigate based on onboarding details
-      const hasDetails = !!(profileData.user.first_name && profileData.user.gender);
-      if (hasDetails) {
-        router.replace("/(tabs)/home");
-      } else {
-        router.replace("/personal-details");
-      }
+      // 6. Navigate to Owner Dashboard
+      router.replace("/owner/dashboard");
     } catch (error: any) {
-      console.log("Login error detail:", error);
+      console.log("Owner login error:", error);
       const errorMsg = error.response?.data?.detail || "Login failed. Check your credentials.";
       Alert.alert("Login Failed", errorMsg);
     } finally {
@@ -96,22 +91,22 @@ export default function LoginScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-          {/* Brand Logo & Header */}
+          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.logoText}>Sport<Text style={styles.logoHighlight}>Circle</Text></Text>
-            <Text style={styles.subtitle}>Welcome back! Sign in to play sports near you.</Text>
+            <Text style={styles.portalBadge}>OWNER PORTAL</Text>
+            <Text style={styles.subtitle}>Manage your sports venues and booking schedules.</Text>
           </View>
 
           {/* Form */}
           <View style={styles.form}>
-            {/* Username / Mobile */}
             <View style={styles.inputWrapper}>
-              <Text style={styles.label}>Username or Mobile Number</Text>
+              <Text style={styles.label}>Username or Mobile</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="person-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Username or 10-digit mobile"
+                  placeholder="Enter username or mobile"
                   placeholderTextColor={COLORS.textSecondary}
                   value={usernameOrMobile}
                   onChangeText={setUsernameOrMobile}
@@ -120,14 +115,8 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            {/* Password */}
             <View style={styles.inputWrapper}>
-              <View style={styles.passwordHeader}>
-                <Text style={styles.label}>Password</Text>
-                <TouchableOpacity onPress={() => router.push("/forgot-password")}>
-                  <Text style={styles.forgotText}>Forgot Password?</Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.label}>Password</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="lock-closed-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
                 <TextInput
@@ -140,16 +129,11 @@ export default function LoginScreen() {
                   autoCapitalize="none"
                 />
                 <TouchableOpacity onPress={() => setSecureText(!secureText)}>
-                  <Ionicons 
-                    name={secureText ? "eye-off-outline" : "eye-outline"} 
-                    size={20} 
-                    color={COLORS.textSecondary} 
-                  />
+                  <Ionicons name={secureText ? "eye-off-outline" : "eye-outline"} size={20} color={COLORS.textSecondary} />
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Login Button */}
             <TouchableOpacity 
               style={[styles.btn, loading ? styles.btnDisabled : null]} 
               onPress={handleLogin}
@@ -159,27 +143,26 @@ export default function LoginScreen() {
                 <ActivityIndicator color={COLORS.surface} />
               ) : (
                 <>
-                  <Text style={styles.btnText}>Login</Text>
+                  <Text style={styles.btnText}>Owner Login</Text>
                   <Ionicons name="arrow-forward" size={18} color={COLORS.surface} style={{ marginLeft: 8 }} />
                 </>
               )}
             </TouchableOpacity>
 
-            {/* Sign Up Link */}
             <View style={styles.footerLink}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={() => router.replace("/signup")}>
-                <Text style={styles.footerLinkText}>Register</Text>
+              <Text style={styles.footerText}>Don't have an owner account? </Text>
+              <TouchableOpacity onPress={() => router.replace("/owner/register")}>
+                <Text style={styles.footerLinkText}>Register Venue</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Owner Portal Link */}
-            <View style={[styles.footerLink, { marginTop: 12 }]}>
-              <Text style={styles.footerText}>Are you a Turf/Court Owner? </Text>
-              <TouchableOpacity onPress={() => router.push("/owner/login")}>
-                <Text style={styles.footerLinkText}>Owner Portal</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+              style={[styles.btnSecondary, { marginTop: 16 }]} 
+              onPress={() => router.replace("/login")}
+            >
+              <Ionicons name="people-outline" size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
+              <Text style={styles.btnSecondaryText}>Go to Player App</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -200,7 +183,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
-    marginBottom: 40,
+    marginBottom: 30,
   },
   logoText: {
     fontSize: 42,
@@ -210,20 +193,31 @@ const styles = StyleSheet.create({
   logoHighlight: {
     color: COLORS.primary,
   },
+  portalBadge: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 12,
+    color: COLORS.surface,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
+    overflow: "hidden",
+    marginTop: 6,
+    letterSpacing: 1,
+  },
   subtitle: {
     fontFamily: "Poppins_400Regular",
     fontSize: 14,
     color: COLORS.textSecondary,
-    marginTop: 8,
+    marginTop: 12,
     textAlign: "center",
     lineHeight: 22,
-    paddingHorizontal: SPACING.md,
   },
   form: {
     marginTop: 10,
   },
   inputWrapper: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   label: {
     fontFamily: "Poppins_500Medium",
@@ -231,17 +225,6 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginBottom: 6,
     paddingLeft: 4,
-  },
-  passwordHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  forgotText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 12,
-    color: COLORS.primary,
-    marginBottom: 6,
   },
   inputContainer: {
     flexDirection: "row",
@@ -282,10 +265,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.surface,
   },
+  btnSecondary: {
+    flexDirection: "row",
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnSecondaryText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: COLORS.primary,
+  },
   footerLink: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 28,
+    marginTop: 24,
   },
   footerText: {
     fontFamily: "Poppins_400Regular",

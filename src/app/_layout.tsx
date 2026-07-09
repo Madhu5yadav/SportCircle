@@ -7,6 +7,7 @@ import { useFonts, Poppins_400Regular, Poppins_500Medium, Poppins_600SemiBold, P
 import store from "../redux/store";
 import { COLORS } from "../theme/theme";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import NotificationToast from "../components/NotificationToast";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,6 +33,8 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Provider store={store}>
         <StatusBar style="dark" />
+        {/* Global Notification Toast — visible on any screen */}
+        <NotificationToast />
         <Stack
           screenOptions={{
             headerStyle: {
@@ -63,6 +66,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           
           {/* Standalone Screens */}
+          <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="friends" options={{ title: "Squad & Friends", headerBackTitle: "Back" }} />
           <Stack.Screen name="search-users" options={{ title: "Search Users", headerBackTitle: "Back" }} />
           <Stack.Screen name="pending-requests" options={{ title: "Pending Requests", headerBackTitle: "Back" }} />
@@ -73,3 +77,4 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+

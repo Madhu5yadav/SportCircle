@@ -56,3 +56,35 @@ def mark_read(
     notif.is_read = True
     db.commit()
     return {"message": "Notification marked as read"}
+
+
+@router.delete("/notification/{id}")
+def delete_notification(
+    id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    notif = db.query(Notification).filter(
+        Notification.id == id,
+        Notification.user_id == current_user.id
+    ).first()
+    
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+        
+    db.delete(notif)
+    db.commit()
+    return {"message": "Notification deleted successfully"}
+
+
+@router.delete("/notifications")
+def delete_all_notifications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    deleted_count = db.query(Notification).filter(
+        Notification.user_id == current_user.id
+    ).delete()
+    db.commit()
+    return {"message": "All notifications deleted successfully", "count": deleted_count}
+

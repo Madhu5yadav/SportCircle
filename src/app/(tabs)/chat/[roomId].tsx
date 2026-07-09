@@ -25,6 +25,15 @@ import { addMessage, setMessages, setActiveRoom } from "../../../redux/chatSlice
 import { SocketService } from "../../../services/socket";
 import { updateWallet } from "../../../redux/authSlice";
 
+const parseUTCDate = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  if (dateStr.endsWith("Z") || dateStr.includes("+") || /-\d{2}:\d{2}$/.test(dateStr)) {
+    return new Date(dateStr);
+  }
+  const isoStr = dateStr.includes(" ") ? dateStr.replace(" ", "T") : dateStr;
+  return new Date(`${isoStr}Z`);
+};
+
 export default function ChatRoomScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
@@ -403,7 +412,7 @@ export default function ChatRoomScreen() {
 
                     {/* Time Stamp */}
                     <Text style={[styles.msgTime, isOwn ? styles.msgOwnTime : null]}>
-                      {new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {parseUTCDate(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </Text>
                   </View>
                 </View>

@@ -1,3 +1,4 @@
+import asyncio
 from sqlalchemy.orm import Session
 from app.models.models import Notification
 
@@ -10,7 +11,7 @@ class NotificationService:
         notif_type: str, 
         db: Session
     ) -> Notification:
-        """Create a notification in the database and prepare for real-time dispatch."""
+        """Create a notification in the database and push via Socket.IO in real time."""
         db_notif = Notification(
             user_id=user_id,
             title=title,
@@ -22,26 +23,37 @@ class NotificationService:
         db.commit()
         db.refresh(db_notif)
         
-        # Trigger real-time push if socket server is running
+        # Push real-time notification via Socket.IO
+        payload = {
+            "id": db_notif.id,
+            "title": db_notif.title,
+            "message": db_notif.message,
+            "type": db_notif.type,
+            "is_read": db_notif.is_read,
+            "created_at": db_notif.created_at.isoformat()
+        }
+        
         try:
             from app.services.socket_service import sio
-            # Emit notification to the user's private socket channel
-            # Running asynchronously or in-process
-            sio.start_background_task(
-                sio.emit,
-                "notification",
-                {
-                    "id": db_notif.id,
-                    "title": db_notif.title,
-                    "message": db_notif.message,
-                    "type": db_notif.type,
-                    "is_read": db_notif.is_read,
-                    "created_at": db_notif.created_at.isoformat()
-                },
-                to=f"user_{user_id}"
-            )
+            room = f"user_{user_id}"
+            
+            # Get or create event loop and schedule the coroutine
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # We're inside an async context (uvicorn), schedule as a task
+                    asyncio.ensure_future(sio.emit("notification", payload, to=room))
+                else:
+                    loop.run_until_complete(sio.emit("notification", payload, to=room))
+            except RuntimeError:
+                # No event loop exists, create one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(sio.emit("notification", payload, to=room))
+                
+            print(f"[NotificationService] Pushed real-time notification to {room}: {title}")
         except Exception as e:
-            # Socket.IO not initialized or user offline, silent failure is okay
-            pass
+            print(f"[NotificationService] Socket emit failed (user may be offline): {e}")
             
         return db_notif
+

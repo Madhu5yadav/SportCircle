@@ -7,7 +7,7 @@ from math import radians, cos, sin, asin, sqrt
 
 from app.database.db import get_db
 from app.models.models import User, Venue, Booking, Wallet, PaymentHistory
-from app.schemas.schemas import VenueResponse, BookingCreate, BookingResponse, WalletResponse, PaymentHistoryResponse, WalletAddFunds
+from app.schemas.schemas import VenueResponse, VenueCreate, BookingCreate, BookingResponse, WalletResponse, PaymentHistoryResponse, WalletAddFunds
 from app.middleware.auth import get_current_user
 from app.services.notification_service import NotificationService
 
@@ -254,3 +254,84 @@ def get_payment_history(
         .order_by(PaymentHistory.id.desc())
         .all()
     )
+
+
+# --- Owner Venues Management ---
+
+@router.get("/venues/owner", response_model=List[VenueResponse])
+def get_owner_venues(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return db.query(Venue).filter(Venue.owner_id == current_user.id).all()
+
+
+@router.post("/venues", response_model=VenueResponse, status_code=201)
+def create_venue(
+    venue_in: VenueCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Promote user to owner on venue creation
+    if current_user.role != "owner":
+        current_user.role = "owner"
+        db.add(current_user)
+        db.commit()
+
+    db_venue = Venue(
+        name=venue_in.name,
+        location=venue_in.location,
+        latitude=venue_in.latitude,
+        longitude=venue_in.longitude,
+        sport=venue_in.sport,
+        facilities=venue_in.facilities,
+        price_per_hour=venue_in.price_per_hour,
+        image_url=venue_in.image_url,
+        offer_details=venue_in.offer_details,
+        owner_id=current_user.id
+    )
+    db.add(db_venue)
+    db.commit()
+    db.refresh(db_venue)
+    return db_venue
+
+
+@router.put("/venue/{id}", response_model=VenueResponse)
+def update_venue(
+    id: int,
+    venue_in: VenueCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    db_venue = db.query(Venue).filter(Venue.id == id, Venue.owner_id == current_user.id).first()
+    if not db_venue:
+        raise HTTPException(status_code=404, detail="Venue not found or unauthorized access.")
+    
+    db_venue.name = venue_in.name
+    db_venue.location = venue_in.location
+    db_venue.latitude = venue_in.latitude
+    db_venue.longitude = venue_in.longitude
+    db_venue.sport = venue_in.sport
+    db_venue.facilities = venue_in.facilities
+    db_venue.price_per_hour = venue_in.price_per_hour
+    db_venue.image_url = venue_in.image_url
+    db_venue.offer_details = venue_in.offer_details
+    
+    db.commit()
+    db.refresh(db_venue)
+    return db_venue
+
+
+@router.delete("/venue/{id}")
+def delete_venue(
+    id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    db_venue = db.query(Venue).filter(Venue.id == id, Venue.owner_id == current_user.id).first()
+    if not db_venue:
+        raise HTTPException(status_code=404, detail="Venue not found or unauthorized access.")
+    
+    db.delete(db_venue)
+    db.commit()
+    return {"message": "Venue deleted successfully"}

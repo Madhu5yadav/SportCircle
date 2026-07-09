@@ -42,7 +42,8 @@ def signup(user_in: UserCreate, db: Session = Depends(get_db)):
     db_user = User(
         username=user_in.username,
         mobile=user_in.mobile,
-        password_hash=hashed_pwd
+        password_hash=hashed_pwd,
+        role=user_in.role
     )
     db.add(db_user)
     db.commit()
@@ -98,7 +99,8 @@ def verify_otp(verify_in: OTPVerify, db: Session = Depends(get_db)):
             "refresh_token": refresh_token,
             "token_type": "bearer",
             "user_id": user.id,
-            "username": user.username
+            "username": user.username,
+            "role": user.role
         }
     }
 
@@ -126,7 +128,8 @@ def login(login_in: UserLogin, db: Session = Depends(get_db)):
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "user_id": user.id,
-        "username": user.username
+        "username": user.username,
+        "role": user.role
     }
 
 

@@ -3,7 +3,7 @@ import { CONFIG } from "../constants/config";
 import { store } from "../redux/store";
 import { addMessage, setTyping, updatePaymentStatus, updatePollVote } from "../redux/chatSlice";
 import { updateGameSlots } from "../redux/gameSlice";
-import { Alert } from "react-native";
+import { addNotification, showToast } from "../redux/notificationSlice";
 
 let socket: Socket | null = null;
 
@@ -92,7 +92,27 @@ export const SocketService = {
     // Listen for notifications
     socket.on("notification", (notif) => {
       console.log("Real-time notification received:", notif);
-      Alert.alert(notif.title, notif.message);
+
+      // Add to Redux notification list
+      store.dispatch(
+        addNotification({
+          id: notif.id || Date.now(),
+          title: notif.title || "SportCircle",
+          message: notif.message || "",
+          type: notif.type || "system",
+          is_read: false,
+          created_at: notif.created_at || new Date().toISOString(),
+        })
+      );
+
+      // Trigger the global toast popup
+      store.dispatch(
+        showToast({
+          title: notif.title || "SportCircle",
+          message: notif.message || "",
+          type: notif.type || "system",
+        })
+      );
     });
 
     return socket;

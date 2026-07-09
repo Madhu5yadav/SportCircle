@@ -24,7 +24,7 @@ import { SocketService } from "../services/socket";
 export default function OTPScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
-  const { mobile, simulatedOtp } = useLocalSearchParams<{ mobile: string; simulatedOtp?: string }>();
+  const { mobile, simulatedOtp, role } = useLocalSearchParams<{ mobile: string; simulatedOtp?: string; role?: string }>();
 
   const [otpCode, setOtpCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -94,8 +94,11 @@ export default function OTPScreen() {
           {
             text: "Continue",
             onPress: () => {
-              // Proceed to Personal Details page
-              router.replace("/personal-details");
+              if (role === "owner" || profileData.user.role === "owner") {
+                router.replace("/owner/dashboard");
+              } else {
+                router.replace("/personal-details");
+              }
             }
           }
         ]);

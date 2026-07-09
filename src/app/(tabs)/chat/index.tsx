@@ -18,6 +18,15 @@ import api from "../../../services/api";
 import { setRooms } from "../../../redux/chatSlice";
 import { SocketService } from "../../../services/socket";
 
+const parseUTCDate = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  if (dateStr.endsWith("Z") || dateStr.includes("+") || /-\d{2}:\d{2}$/.test(dateStr)) {
+    return new Date(dateStr);
+  }
+  const isoStr = dateStr.includes(" ") ? dateStr.replace(" ", "T") : dateStr;
+  return new Date(`${isoStr}Z`);
+};
+
 export default function ChatListScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
@@ -116,7 +125,7 @@ export default function ChatListScreen() {
                     <Text style={styles.roomName} numberOfLines={1}>{displayName}</Text>
                     {lastMsg && (
                       <Text style={styles.timeText}>
-                        {new Date(lastMsg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        {parseUTCDate(lastMsg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </Text>
                     )}
                   </View>

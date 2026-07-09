@@ -40,11 +40,15 @@ export default function EntryScreen() {
             
             SocketService.connect(profileData.user.id, profileData.user.username);
             
-            const hasDetails = !!(profileData.user.first_name && profileData.user.gender);
-            if (hasDetails) {
-              setTargetRoute("/(tabs)/home");
+            if (profileData.user.role === "owner") {
+              setTargetRoute("/owner/dashboard");
             } else {
-              setTargetRoute("/personal-details");
+              const hasDetails = !!(profileData.user.first_name && profileData.user.gender);
+              if (hasDetails) {
+                setTargetRoute("/(tabs)/home");
+              } else {
+                setTargetRoute("/personal-details");
+              }
             }
             return;
           } catch (apiError) {

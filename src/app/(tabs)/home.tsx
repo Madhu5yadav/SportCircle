@@ -12,7 +12,8 @@ import {
   Dimensions,
   Platform,
   Alert,
-  SafeAreaView
+  SafeAreaView,
+  Modal
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
@@ -23,6 +24,8 @@ import api from "../../services/api";
 import { setGames } from "../../redux/gameSlice";
 import { setFriends } from "../../redux/friendSlice";
 import { updateWallet } from "../../redux/authSlice";
+import { setNotifications } from "../../redux/notificationSlice";
+import * as Location from "expo-location";
 
 const { width } = Dimensions.get("window");
 const CAROUSEL_WIDTH = width - SPACING.xl * 2;
@@ -40,6 +43,7 @@ export default function HomeScreen() {
   
   const auth = useSelector((state: RootState) => state.auth);
   const game = useSelector((state: RootState) => state.game);
+  const unreadNotifications = useSelector((state: RootState) => state.notification.unreadCount);
   
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -51,7 +55,49 @@ export default function HomeScreen() {
   const [recommendedGames, setRecommendedGames] = useState<any[]>([]);
   const [nearbyTurfs, setNearbyTurfs] = useState<any[]>([]);
   const [suggestedPlayers, setSuggestedPlayers] = useState<any[]>([]);
-  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [currentAddress, setCurrentAddress] = useState("Acquiring location...");
+
+  const fetchGPSLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        const { latitude, longitude } = location.coords;
+        const response = await Location.reverseGeocodeAsync({ latitude, longitude });
+        if (response && response.length > 0) {
+          const { city, region, district } = response[0];
+          const displayCity = city || district || "Unknown City";
+          const displayRegion = region || "";
+          setCurrentAddress(`${displayCity}${displayRegion ? `, ${displayRegion}` : ""}`);
+        } else {
+          setCurrentAddress("Unknown Location");
+        }
+      } else {
+        setCurrentAddress("Location Denied");
+      }
+    } catch (error) {
+      console.log("Error fetching GPS location:", error);
+      if (auth.user?.latitude && auth.user?.longitude) {
+        try {
+          const response = await Location.reverseGeocodeAsync({
+            latitude: auth.user.latitude,
+            longitude: auth.user.longitude,
+          });
+          if (response && response.length > 0) {
+            const { city, region, district } = response[0];
+            setCurrentAddress(`${city || district || "Bengaluru"}${region ? `, ${region}` : ""}`);
+            return;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+      setCurrentAddress("Bengaluru, KA");
+    }
+  };
+
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -96,9 +142,13 @@ export default function HomeScreen() {
       // 3. Fetch friend suggestions (users that are not friends yet)
       const suggestionsRes = await api.get("/friends", { params: { suggestions: true } });
       // We will fallback to dummy player lists if database suggestions is empty
+      const normalizedSuggestions = (suggestionsRes.data || []).map((p: any) => ({
+        ...p,
+        id: p.id || p.friend_id
+      }));
       setSuggestedPlayers(
-        suggestionsRes.data.length > 0
-          ? suggestionsRes.data
+        normalizedSuggestions.length > 0
+          ? normalizedSuggestions
           : [
               { id: 101, username: "rahul_s", profile_pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150" },
               { id: 102, username: "amit_sharma", profile_pic: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=150" },
@@ -106,9 +156,9 @@ export default function HomeScreen() {
             ]
       );
 
-      // 4. Fetch notifications count
+      // 4. Fetch notifications and store in Redux
       const notifsRes = await api.get("/notifications");
-      setUnreadNotifications(notifsRes.data.filter((n: any) => !n.is_read).length);
+      dispatch(setNotifications(notifsRes.data));
       
     } catch (error) {
       console.log("Error loading dashboard data:", error);
@@ -119,11 +169,12 @@ export default function HomeScreen() {
 
   useEffect(() => {
     fetchDashboardData();
+    fetchGPSLocation();
   }, [auth.user]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchDashboardData();
+    await Promise.all([fetchDashboardData(), fetchGPSLocation()]);
     setRefreshing(false);
   }, [auth.user]);
 
@@ -159,14 +210,15 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.safeContainer}>
       {/* Top Header */}
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerLeft}>
           <Text style={styles.brandLogo}>Sport<Text style={{ color: COLORS.primary }}>Circle</Text></Text>
+          <Text style={styles.greetingText}>
+            Hello, {auth.user?.first_name || auth.user?.username || "Player"}!
+          </Text>
           <View style={styles.locationContainer}>
             <Ionicons name="location-sharp" size={14} color={COLORS.primary} />
             <Text style={styles.locationText} numberOfLines={1}>
-              {auth.user?.first_name 
-                ? `Bengaluru, KA`
-                : "Acquiring location..."}
+              {currentAddress}
             </Text>
           </View>
         </View>
@@ -178,7 +230,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
           
           {/* Notifications Launcher */}
-          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push({ pathname: "/friends", params: { tab: "requests" } })}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/notifications")}>
             <Ionicons name="notifications-outline" size={24} color={COLORS.textPrimary} />
             {unreadNotifications > 0 && (
               <View style={styles.badge}>
@@ -436,6 +488,15 @@ const styles = StyleSheet.create({
     fontSize: 22,
     color: COLORS.textPrimary,
     letterSpacing: -0.5,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  greetingText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: COLORS.textPrimary,
+    marginTop: 2,
   },
   locationContainer: {
     flexDirection: "row",

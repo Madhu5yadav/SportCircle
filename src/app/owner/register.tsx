@@ -7,83 +7,67 @@ import {
   TouchableOpacity, 
   SafeAreaView, 
   ScrollView, 
-  ActivityIndicator,
+  ActivityIndicator, 
   Alert,
   KeyboardAvoidingView,
   Platform
 } from "react-native";
 import { useRouter } from "expo-router";
-import { useDispatch } from "react-redux";
-import { COLORS, SPACING, SHADOWS } from "../theme/theme";
+import { COLORS, SPACING, SHADOWS } from "../../theme/theme";
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
-import { CONFIG } from "../constants/config";
-import { StorageService } from "../services/storage";
-import { setCredentials } from "../redux/authSlice";
-import { SocketService } from "../services/socket";
+import { CONFIG } from "../../constants/config";
 
-export default function LoginScreen() {
+export default function OwnerRegisterScreen() {
   const router = useRouter();
-  const dispatch = useDispatch();
 
-  const [usernameOrMobile, setUsernameOrMobile] = useState("");
+  const [username, setUsername] = useState("");
+  const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [secureText, setSecureText] = useState(true);
 
-  const handleLogin = async () => {
-    if (!usernameOrMobile.trim() || !password.trim()) {
-      Alert.alert("Required Fields", "Please enter your username/mobile and password.");
+  const handleRegister = async () => {
+    if (!username.trim() || !mobile.trim() || !password.trim()) {
+      Alert.alert("Required Fields", "Please fill in all the details.");
+      return;
+    }
+
+    if (mobile.trim().length !== 10 || isNaN(Number(mobile))) {
+      Alert.alert("Invalid Input", "Please enter a valid 10-digit mobile number.");
       return;
     }
 
     setLoading(true);
     try {
-      // 1. Authenticate with credentials
-      const response = await axios.post(`${CONFIG.API_URL}/login`, {
-        username_or_mobile: usernameOrMobile.trim(),
+      // Sign up with role: owner
+      const response = await axios.post(`${CONFIG.API_URL}/signup`, {
+        username: username.trim().toLowerCase(),
+        mobile: mobile.trim(),
         password: password,
+        role: "owner"
       }, { timeout: 10000 });
 
-      const { access_token, refresh_token } = response.data;
+      // Retrieve generated OTP from response (dev fallback)
+      const otpCode = response.data.otp;
 
-      // 2. Securely store Access & Refresh tokens
-      await StorageService.setAccessToken(access_token);
-      await StorageService.setRefreshToken(refresh_token);
-
-      // 3. Fetch User profile details
-      const profileRes = await axios.get(`${CONFIG.API_URL}/profile`, {
-        headers: { Authorization: `Bearer ${access_token}` },
-        timeout: 10000
-      });
-
-      const profileData = profileRes.data;
-
-      // 4. Update Redux store
-      dispatch(
-        setCredentials({
-          user: profileData.user,
-          token: access_token,
-          refreshToken: refresh_token,
-          wallet: profileData.wallet,
-          settings: profileData.settings,
-        })
+      Alert.alert(
+        "Verification Required",
+        `OTP sent to ${mobile.trim()}. (Development code: ${otpCode})`,
+        [
+          { 
+            text: "Proceed to Verify", 
+            onPress: () => router.push({
+              pathname: "/otp",
+              params: { mobile: mobile.trim(), role: "owner" }
+            })
+          }
+        ]
       );
-
-      // 5. Connect Socket.IO
-      SocketService.connect(profileData.user.id, profileData.user.username);
-
-      // 6. Navigate based on onboarding details
-      const hasDetails = !!(profileData.user.first_name && profileData.user.gender);
-      if (hasDetails) {
-        router.replace("/(tabs)/home");
-      } else {
-        router.replace("/personal-details");
-      }
     } catch (error: any) {
-      console.log("Login error detail:", error);
-      const errorMsg = error.response?.data?.detail || "Login failed. Check your credentials.";
-      Alert.alert("Login Failed", errorMsg);
+      console.log("Owner registration error:", error);
+      const errorMsg = error.response?.data?.detail || "Registration failed. Try a different username or mobile.";
+      Alert.alert("Registration Failed", errorMsg);
     } finally {
       setLoading(false);
     }
@@ -96,43 +80,56 @@ export default function LoginScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-          {/* Brand Logo & Header */}
+          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.logoText}>Sport<Text style={styles.logoHighlight}>Circle</Text></Text>
-            <Text style={styles.subtitle}>Welcome back! Sign in to play sports near you.</Text>
+            <Text style={styles.portalBadge}>VENUE OWNER REGISTRATION</Text>
+            <Text style={styles.subtitle}>Register your business to begin managing courts and booking requests.</Text>
           </View>
 
           {/* Form */}
           <View style={styles.form}>
-            {/* Username / Mobile */}
+            {/* Username */}
             <View style={styles.inputWrapper}>
-              <Text style={styles.label}>Username or Mobile Number</Text>
+              <Text style={styles.label}>Business Username</Text>
               <View style={styles.inputContainer}>
-                <Ionicons name="person-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+                <Ionicons name="business-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Username or 10-digit mobile"
+                  placeholder="Enter business/owner username"
                   placeholderTextColor={COLORS.textSecondary}
-                  value={usernameOrMobile}
-                  onChangeText={setUsernameOrMobile}
+                  value={username}
+                  onChangeText={setUsername}
                   autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            {/* Mobile */}
+            <View style={styles.inputWrapper}>
+              <Text style={styles.label}>10-Digit Mobile Number</Text>
+              <View style={styles.inputContainer}>
+                <Ionicons name="call-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter contact mobile number"
+                  placeholderTextColor={COLORS.textSecondary}
+                  keyboardType="numeric"
+                  maxLength={10}
+                  value={mobile}
+                  onChangeText={setMobile}
                 />
               </View>
             </View>
 
             {/* Password */}
             <View style={styles.inputWrapper}>
-              <View style={styles.passwordHeader}>
-                <Text style={styles.label}>Password</Text>
-                <TouchableOpacity onPress={() => router.push("/forgot-password")}>
-                  <Text style={styles.forgotText}>Forgot Password?</Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.label}>Password</Text>
               <View style={styles.inputContainer}>
                 <Ionicons name="lock-closed-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter your password"
+                  placeholder="Create password"
                   placeholderTextColor={COLORS.textSecondary}
                   secureTextEntry={secureText}
                   value={password}
@@ -140,46 +137,40 @@ export default function LoginScreen() {
                   autoCapitalize="none"
                 />
                 <TouchableOpacity onPress={() => setSecureText(!secureText)}>
-                  <Ionicons 
-                    name={secureText ? "eye-off-outline" : "eye-outline"} 
-                    size={20} 
-                    color={COLORS.textSecondary} 
-                  />
+                  <Ionicons name={secureText ? "eye-off-outline" : "eye-outline"} size={20} color={COLORS.textSecondary} />
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Login Button */}
             <TouchableOpacity 
               style={[styles.btn, loading ? styles.btnDisabled : null]} 
-              onPress={handleLogin}
+              onPress={handleRegister}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color={COLORS.surface} />
               ) : (
                 <>
-                  <Text style={styles.btnText}>Login</Text>
-                  <Ionicons name="arrow-forward" size={18} color={COLORS.surface} style={{ marginLeft: 8 }} />
+                  <Text style={styles.btnText}>Register Venue</Text>
+                  <Ionicons name="chevron-forward" size={18} color={COLORS.surface} style={{ marginLeft: 8 }} />
                 </>
               )}
             </TouchableOpacity>
 
-            {/* Sign Up Link */}
             <View style={styles.footerLink}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
-              <TouchableOpacity onPress={() => router.replace("/signup")}>
-                <Text style={styles.footerLinkText}>Register</Text>
+              <Text style={styles.footerText}>Already have an owner account? </Text>
+              <TouchableOpacity onPress={() => router.replace("/owner/login")}>
+                <Text style={styles.footerLinkText}>Login</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Owner Portal Link */}
-            <View style={[styles.footerLink, { marginTop: 12 }]}>
-              <Text style={styles.footerText}>Are you a Turf/Court Owner? </Text>
-              <TouchableOpacity onPress={() => router.push("/owner/login")}>
-                <Text style={styles.footerLinkText}>Owner Portal</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+              style={[styles.btnSecondary, { marginTop: 16 }]} 
+              onPress={() => router.replace("/login")}
+            >
+              <Ionicons name="people-outline" size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
+              <Text style={styles.btnSecondaryText}>Back to Player App</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -200,7 +191,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
-    marginBottom: 40,
+    marginBottom: 30,
   },
   logoText: {
     fontSize: 42,
@@ -210,20 +201,31 @@ const styles = StyleSheet.create({
   logoHighlight: {
     color: COLORS.primary,
   },
+  portalBadge: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 11,
+    color: COLORS.surface,
+    backgroundColor: COLORS.success,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
+    overflow: "hidden",
+    marginTop: 6,
+    letterSpacing: 1,
+  },
   subtitle: {
     fontFamily: "Poppins_400Regular",
     fontSize: 14,
     color: COLORS.textSecondary,
-    marginTop: 8,
+    marginTop: 12,
     textAlign: "center",
     lineHeight: 22,
-    paddingHorizontal: SPACING.md,
   },
   form: {
     marginTop: 10,
   },
   inputWrapper: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   label: {
     fontFamily: "Poppins_500Medium",
@@ -231,17 +233,6 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     marginBottom: 6,
     paddingLeft: 4,
-  },
-  passwordHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  forgotText: {
-    fontFamily: "Poppins_600SemiBold",
-    fontSize: 12,
-    color: COLORS.primary,
-    marginBottom: 6,
   },
   inputContainer: {
     flexDirection: "row",
@@ -282,10 +273,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.surface,
   },
+  btnSecondary: {
+    flexDirection: "row",
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnSecondaryText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: COLORS.primary,
+  },
   footerLink: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 28,
+    marginTop: 24,
   },
   footerText: {
     fontFamily: "Poppins_400Regular",

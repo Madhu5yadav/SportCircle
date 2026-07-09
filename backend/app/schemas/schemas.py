@@ -32,6 +32,7 @@ class UserCreate(BaseModel):
     username: str
     mobile: str
     password: str
+    role: Optional[str] = "player"
 
 class UserLogin(BaseModel):
     username_or_mobile: str
@@ -43,6 +44,7 @@ class Token(BaseModel):
     token_type: str = "bearer"
     user_id: int
     username: str
+    role: Optional[str] = "player"
 
 class TokenRefresh(BaseModel):
     refresh_token: str
@@ -72,6 +74,7 @@ class UserResponse(BaseModel):
     longitude: Optional[float] = None
     about: Optional[str] = None
     profile_pic: Optional[str] = None
+    role: str = "player"
     created_at: datetime
 
     class Config:
@@ -245,6 +248,22 @@ class VenueResponse(BaseModel):
     rating: float
     price_per_hour: Decimal
     image_url: Optional[str] = None
+    owner_id: Optional[int] = None
+    offer_details: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class VenueCreate(BaseModel):
+    name: str
+    location: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    sport: str
+    facilities: Optional[str] = None
+    price_per_hour: Decimal
+    image_url: Optional[str] = None
+    offer_details: Optional[str] = None
 
     class Config:
         from_attributes = True

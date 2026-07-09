@@ -25,6 +25,35 @@ from app.controllers import (
 try:
     Base.metadata.create_all(bind=engine)
     print("Database tables synchronized successfully!")
+    
+    # Run schema migrations
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        # Add role to users if not exists
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'player';"))
+            conn.commit()
+            print("Migration: Added role column to users table.")
+        except Exception:
+            pass
+            
+        # Add owner_id to venues if not exists
+        try:
+            conn.execute(text("ALTER TABLE venues ADD COLUMN owner_id INT DEFAULT NULL;"))
+            conn.commit()
+            conn.execute(text("ALTER TABLE venues ADD CONSTRAINT fk_venues_owner FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE;"))
+            conn.commit()
+            print("Migration: Added owner_id column to venues table.")
+        except Exception:
+            pass
+
+        # Add offer_details to venues if not exists
+        try:
+            conn.execute(text("ALTER TABLE venues ADD COLUMN offer_details VARCHAR(255) DEFAULT NULL;"))
+            conn.commit()
+            print("Migration: Added offer_details column to venues table.")
+        except Exception:
+            pass
 except Exception as e:
     print("Error synchronizing database tables, please verify MySQL connectivity:", e)
 
