@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { 
   View, 
   Text, 
@@ -11,7 +11,7 @@ import {
   Alert
 } from "react-native";
 import Swipeable from "react-native-gesture-handler/Swipeable";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS, SPACING, SHADOWS } from "../../../theme/theme";
@@ -38,9 +38,10 @@ export default function ChatListScreen() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadRooms = async () => {
-    setLoading(true);
+  const loadRooms = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
     try {
       const response = await api.get("/chat");
       const roomsData = response.data;
@@ -54,11 +55,19 @@ export default function ChatListScreen() {
       console.log("Error fetching chat rooms:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    loadRooms();
+  useFocusEffect(
+    useCallback(() => {
+      loadRooms(false);
+    }, [])
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadRooms(true);
   }, []);
 
   const handleDeleteRoom = async (roomId: number) => {
@@ -150,6 +159,8 @@ export default function ChatListScreen() {
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="chatbubbles-outline" size={48} color={COLORS.cardBackground} />
