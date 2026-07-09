@@ -98,6 +98,8 @@ export default function TabsLayout() {
         name="chat/[roomId]"
         options={{
           href: null,
+          tabBarStyle: { display: "none" },
+          headerShown: false,
         }}
       />
       <Tabs.Screen

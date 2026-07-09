@@ -317,7 +317,9 @@ export default function ChatRoomScreen() {
         </TouchableOpacity>
         
         <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle} numberOfLines={1}>Chat Room #{parsedRoomId}</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {roomDetail?.name || `Chat Room #${parsedRoomId}`}
+          </Text>
           <Text style={styles.headerSub}>
             {typingUsers.length > 0 
               ? `${typingUsers.map(u => u.username).join(", ")} typing...`
