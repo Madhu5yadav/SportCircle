@@ -912,7 +912,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
     borderRadius: 20,
-    paddingHorizontal: 14,
+    paddingLeft: 16,
+    paddingRight: 16,
+    paddingVertical: 0,
     height: 40,
     fontFamily: "Poppins_400Regular",
     fontSize: 14,
@@ -920,6 +922,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
+    textAlignVertical: "center",
   },
   sendBtn: {
     width: 40,
