@@ -1,28 +1,27 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  Image, 
-  RefreshControl,
+import { FontAwesome5, Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
+import {
   ActivityIndicator,
+  Alert,
   Dimensions,
-  Platform,
-  Alert
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { useSelector, useDispatch } from "react-redux";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
-import { COLORS, SPACING, SHADOWS } from "../../theme/theme";
+import { useDispatch, useSelector } from "react-redux";
+import { updateWallet } from "../../redux/authSlice";
+import { setGames } from "../../redux/gameSlice";
+import { setNotifications } from "../../redux/notificationSlice";
 import { RootState } from "../../redux/store";
 import api from "../../services/api";
-import { setGames } from "../../redux/gameSlice";
-import { updateWallet } from "../../redux/authSlice";
-import { setNotifications } from "../../redux/notificationSlice";
-import * as Location from "expo-location";
+import { COLORS, SPACING } from "../../theme/theme";
 
 const { width } = Dimensions.get("window");
 const CAROUSEL_WIDTH = width - SPACING.xl * 2;
@@ -37,15 +36,15 @@ const SPONSOR_BANNERS = [
 export default function HomeScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
-  
+
   const auth = useSelector((state: RootState) => state.auth);
   const game = useSelector((state: RootState) => state.game);
   const unreadNotifications = useSelector((state: RootState) => state.notification.unreadCount);
-  
+
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [bannerIndex, setBannerIndex] = useState(0);
-  
+
   // Custom Data States
   const [nearbyGames, setNearbyGames] = useState<any[]>([]);
   const [upcomingGames, setUpcomingGames] = useState<any[]>([]);
@@ -112,13 +111,13 @@ export default function HomeScreen() {
       // Separate games for display
       setNearbyGames(allGames.filter((g: any) => !g.is_joined));
       setUpcomingGames(allGames.filter((g: any) => g.is_joined));
-      
+
       // Recommended games based on user preferred sports
       try {
         const profileRes = await api.get("/profile");
         const prefSports = profileRes.data.preferred_sports || [];
         setRecommendedGames(allGames.filter((g: any) => prefSports.includes(g.sport_type) && !g.is_joined));
-        
+
         // Sync Redux wallet balance in case of updates
         dispatch(updateWallet(parseFloat(profileRes.data.wallet.balance)));
       } catch (err) {
@@ -146,17 +145,17 @@ export default function HomeScreen() {
         normalizedSuggestions.length > 0
           ? normalizedSuggestions
           : [
-              { id: 101, username: "michael05", profile_pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150" },
-              { id: 102, username: "Kabi_lan", profile_pic: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=150" },
-              { id: 103, username: "Velu10", profile_pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150" },
-              { id: 104, username: "Kau_si", profile_pic: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=150" }
-            ]
+            { id: 101, username: "michael05", profile_pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150" },
+            { id: 102, username: "Kabi_lan", profile_pic: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=150" },
+            { id: 103, username: "Velu10", profile_pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150" },
+            { id: 104, username: "Kau_si", profile_pic: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=150" }
+          ]
       );
 
       // 4. Fetch notifications and store in Redux
       const notifsRes = await api.get("/notifications");
       dispatch(setNotifications(notifsRes.data));
-      
+
     } catch (error) {
       console.log("Error loading dashboard data:", error);
     } finally {
@@ -262,7 +261,7 @@ export default function HomeScreen() {
                   </View>
                 ))}
               </ScrollView>
-              
+
               {/* Banner dots */}
               <View style={styles.bannerDots}>
                 {SPONSOR_BANNERS.map((_, idx) => (
@@ -290,13 +289,13 @@ export default function HomeScreen() {
               <View style={styles.section}>
                 <Text style={styles.sectionHeading}>Upcoming Games</Text>
                 {upcomingGames.map((g) => (
-                  <TouchableOpacity 
-                    key={g.id} 
+                  <TouchableOpacity
+                    key={g.id}
                     style={styles.upcomingGameCard}
                     onPress={() => router.push({ pathname: "/(tabs)/explore", params: { gameId: g.id } })}
                   >
                     <View style={styles.upcomingGameTopRow}>
-                      <Text style={styles.upcomingGameTime}>{g.game_date}, {g.start_time.slice(0,5)} - {g.end_time.slice(0,5)}</Text>
+                      <Text style={styles.upcomingGameTime}>{g.game_date}, {g.start_time.slice(0, 5)} - {g.end_time.slice(0, 5)}</Text>
                       <View style={styles.joinedPill}>
                         <Text style={styles.joinedPillText}>Joined</Text>
                       </View>
@@ -322,7 +321,7 @@ export default function HomeScreen() {
                   <Ionicons name="arrow-forward" size={24} color={COLORS.textPrimary} />
                 </TouchableOpacity>
               </View>
-              
+
               {nearbyGames.length === 0 ? (
                 <View style={styles.emptyCard}>
                   <Text style={styles.emptyText}>No nearby games scheduled yet.</Text>
@@ -330,8 +329,8 @@ export default function HomeScreen() {
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
                   {nearbyGames.slice(0, 3).map((g) => (
-                    <TouchableOpacity 
-                      key={g.id} 
+                    <TouchableOpacity
+                      key={g.id}
                       style={styles.nearbyGameCard}
                       onPress={() => router.push({ pathname: "/(tabs)/explore", params: { gameId: g.id } })}
                     >
@@ -339,12 +338,12 @@ export default function HomeScreen() {
                         <Text style={styles.nearbyGameSport}>{g.sport_type}</Text>
                         <Text style={styles.nearbyGameHyphen}>-</Text>
                         <Text style={styles.nearbyGamePlayers}>{g.joined_count}/{g.player_count}</Text>
-                        <Ionicons name="people" size={16} color={COLORS.textPrimary} style={{marginLeft: 4, marginRight: 'auto'}} />
+                        <Ionicons name="people" size={16} color={COLORS.textPrimary} style={{ marginLeft: 4, marginRight: 'auto' }} />
                         <TouchableOpacity style={styles.joinBtn} onPress={() => router.push({ pathname: "/(tabs)/explore", params: { gameId: g.id } })}>
                           <Text style={styles.joinBtnText}>Join</Text>
                         </TouchableOpacity>
                       </View>
-                      <Text style={styles.nearbyGameTime}>{g.game_date}, {g.start_time.slice(0,5)} - {g.end_time.slice(0,5)}</Text>
+                      <Text style={styles.nearbyGameTime}>{g.game_date}, {g.start_time.slice(0, 5)} - {g.end_time.slice(0, 5)}</Text>
                       <View style={styles.nearbyGameBottomRow}>
                         <Ionicons name="location-sharp" size={14} color={COLORS.textPrimary} />
                         <Text style={styles.nearbyGameVenue} numberOfLines={1}>{g.location}</Text>
@@ -363,14 +362,14 @@ export default function HomeScreen() {
                   <Ionicons name="arrow-forward" size={24} color={COLORS.textPrimary} />
                 </TouchableOpacity>
               </View>
-              
+
               {nearbyTurfs.length === 0 ? (
                 <ActivityIndicator color={COLORS.primary} />
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
                   {nearbyTurfs.map((t) => (
-                    <TouchableOpacity 
-                      key={t.id} 
+                    <TouchableOpacity
+                      key={t.id}
                       style={styles.venueCard}
                       onPress={() => router.push({ pathname: "/(tabs)/booking", params: { venueId: t.id } })}
                     >
@@ -378,7 +377,7 @@ export default function HomeScreen() {
                         <Image source={{ uri: t.image_url || "https://images.unsplash.com/photo-1529900748604-07564a03e7a6?q=80&w=250" }} style={styles.venueImg} />
                         <View style={styles.venueRating}>
                           <Text style={styles.venueRatingText}>{t.rating}</Text>
-                          <Ionicons name="star" size={10} color="#FFD700" style={{marginLeft: 2}} />
+                          <Ionicons name="star" size={10} color="#FFD700" style={{ marginLeft: 2 }} />
                         </View>
                       </View>
                       <View style={styles.venueInfo}>
@@ -417,7 +416,7 @@ export default function HomeScreen() {
                 </ScrollView>
               </View>
             </View>
-            
+
           </>
         )}
       </ScrollView>
@@ -560,7 +559,7 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   upcomingGameCard: {
-    backgroundColor: "#DDE8F9",
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 16,
     padding: SPACING.lg,
     marginBottom: SPACING.md,
@@ -614,7 +613,7 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   nearbyGameCard: {
-    backgroundColor: "#DDE8F9",
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 16,
     padding: SPACING.md,
     marginRight: SPACING.md,
@@ -670,7 +669,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   venueCard: {
-    backgroundColor: "#DDE8F9",
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 16,
     marginRight: SPACING.md,
     width: 180,
@@ -698,7 +697,7 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_700Bold",
     fontSize: 12,
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: {width: -1, height: 1},
+    textShadowOffset: { width: -1, height: 1 },
     textShadowRadius: 10
   },
   venueInfo: {
@@ -728,7 +727,7 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   playersContainer: {
-    backgroundColor: "#DDE8F9",
+    backgroundColor: COLORS.cardBackground,
     padding: SPACING.lg,
     borderTopLeftRadius: 16,
     borderBottomLeftRadius: 16,
@@ -764,7 +763,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   emptyCard: {
-    backgroundColor: "#DDE8F9",
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 16,
     padding: 24,
     alignItems: "center",
