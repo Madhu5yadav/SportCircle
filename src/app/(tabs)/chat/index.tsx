@@ -95,6 +95,22 @@ export default function ChatListScreen() {
     );
   };
 
+  const isGameExpired = (room: any) => {
+    if (room.type !== "game") return false;
+    if (!room.game_date || !room.start_time) return false;
+    try {
+      const now = new Date();
+      const [yr, mo, dy] = room.game_date.split("-").map(Number);
+      const [hr, min, sec] = room.start_time.split(":").map(Number);
+      const gameStart = new Date(yr, mo - 1, dy, hr, min, sec || 0);
+      if (isNaN(gameStart.getTime())) return false;
+      const blockTime = new Date(gameStart.getTime() + 10 * 60 * 1000);
+      return now > blockTime;
+    } catch (e) {
+      return false;
+    }
+  };
+
   const getRoomIcon = (type: string) => {
     switch (type) {
       case "game": return "football-outline";
@@ -150,7 +166,7 @@ export default function ChatListScreen() {
                 containerStyle={styles.swipeableContainer}
               >
                 <TouchableOpacity
-                  style={styles.roomItem}
+                  style={[styles.roomItem, isGameExpired(item) && styles.roomItemExpired]}
                   onPress={() => router.push(`/(tabs)/chat/${item.id}`)}
                 >
                   <View style={styles.avatarWrapper}>
@@ -244,6 +260,11 @@ const styles = StyleSheet.create({
     width: 70,
     height: "100%",
     borderRadius: 20,
+  },
+  roomItemExpired: {
+    opacity: 0.55,
+    backgroundColor: "#F5F5F5",
+    borderColor: "#EAEAEA",
   },
   avatarWrapper: {
     position: "relative",

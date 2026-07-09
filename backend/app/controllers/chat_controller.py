@@ -203,13 +203,13 @@ async def post_message(
     if not room:
         raise HTTPException(status_code=404, detail="Chat room not found")
         
-    # Block chat if 10 mins past game expiration
+    # Block chat if 10 mins past game start time
     if room.game_id and room.game:
-        game_end_dt = datetime.combine(room.game.game_date, room.game.end_time)
-        if datetime.now() > game_end_dt + timedelta(minutes=10):
+        game_start_dt = datetime.combine(room.game.game_date, room.game.start_time)
+        if datetime.now() > game_start_dt + timedelta(minutes=10):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Chatting is blocked as this game concluded more than 10 minutes ago"
+                detail="Chatting is blocked as this game started more than 10 minutes ago"
             )
             
     # Serialize poll options / vote shells if present

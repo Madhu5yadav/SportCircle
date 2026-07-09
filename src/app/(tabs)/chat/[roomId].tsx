@@ -70,15 +70,15 @@ export default function ChatRoomScreen() {
 
   const isChatBlocked = () => {
     if (!roomDetail || roomDetail.type !== "game") return false;
-    if (!roomDetail.game_date || !roomDetail.end_time) return false;
+    if (!roomDetail.game_date || !roomDetail.start_time) return false;
     
     try {
       const now = new Date();
       const [yr, mo, dy] = roomDetail.game_date.split("-").map(Number);
-      const [hr, min, sec] = roomDetail.end_time.split(":").map(Number);
-      const gameEnd = new Date(yr, mo - 1, dy, hr, min, sec || 0);
-      if (isNaN(gameEnd.getTime())) return false;
-      const blockTime = new Date(gameEnd.getTime() + 10 * 60 * 1000);
+      const [hr, min, sec] = roomDetail.start_time.split(":").map(Number);
+      const gameStart = new Date(yr, mo - 1, dy, hr, min, sec || 0);
+      if (isNaN(gameStart.getTime())) return false;
+      const blockTime = new Date(gameStart.getTime() + 10 * 60 * 1000);
       return now > blockTime;
     } catch (e) {
       return false;
@@ -489,7 +489,7 @@ export default function ChatRoomScreen() {
         {isChatBlocked() ? (
           <View style={styles.blockedBar}>
             <Ionicons name="lock-closed" size={20} color={COLORS.textSecondary} style={{ marginRight: 8 }} />
-            <Text style={styles.blockedText}>Chat is archived because the game has concluded.</Text>
+            <Text style={styles.blockedText}>Chatting is closed as this game started more than 10 minutes ago.</Text>
           </View>
         ) : (
           <View style={styles.inputBar}>
