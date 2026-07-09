@@ -422,7 +422,11 @@ export default function ChatRoomScreen() {
               const isOwn = item.sender_id === auth.user?.id;
               
               return (
-                <View style={[styles.bubbleWrapper, isOwn ? styles.bubbleOwnWrapper : styles.bubbleOtherWrapper]}>
+                <View style={[
+                  styles.bubbleWrapper, 
+                  isOwn ? styles.bubbleOwnWrapper : styles.bubbleOtherWrapper,
+                  item.type === "image" ? { maxWidth: "88%" } : null
+                ]}>
                   {/* Sender metadata */}
                   {!isOwn && (
                     <Text style={styles.senderName}>{item.sender_username}</Text>
@@ -432,7 +436,8 @@ export default function ChatRoomScreen() {
                   <View style={[
                     styles.bubble, 
                     isOwn ? styles.bubbleOwn : styles.bubbleOther,
-                    item.type === "poll" || item.type === "payment" ? styles.specialBubble : null
+                    item.type === "poll" || item.type === "payment" ? styles.specialBubble : null,
+                    item.type === "image" ? { padding: 4 } : null
                   ]}>
                     
                     {/* Media Type Handler */}
@@ -441,8 +446,12 @@ export default function ChatRoomScreen() {
                     )}
 
                     {item.type === "image" && (
-                      <View>
-                        <Image source={{ uri: item.image_url }} style={styles.bubbleImg} />
+                      <View style={styles.imageBubbleWrapper}>
+                        <Image 
+                          source={{ uri: item.image_url }} 
+                          style={styles.bubbleImg} 
+                          resizeMode="contain"
+                        />
                         {item.content && <Text style={[styles.msgText, isOwn ? styles.msgOwnText : null, { marginTop: 6 }]}>{item.content}</Text>}
                       </View>
                     )}
@@ -868,6 +877,13 @@ const styles = StyleSheet.create({
   bubbleOtherWrapper: {
     alignSelf: "flex-start",
   },
+  imageBubbleWrapper: {
+    // Give images more room to breathe
+    width: 240,
+    minWidth: 200,
+    overflow: "hidden",
+    borderRadius: 12,
+  },
   senderName: {
     fontFamily: "Poppins_500Medium",
     fontSize: 11,
@@ -919,9 +935,9 @@ const styles = StyleSheet.create({
   },
   bubbleImg: {
     width: "100%",
-    height: 140,
+    aspectRatio: 4 / 3,
     borderRadius: 12,
-    resizeMode: "cover",
+    backgroundColor: "#000",
   },
   pollCard: {
     padding: 4,
