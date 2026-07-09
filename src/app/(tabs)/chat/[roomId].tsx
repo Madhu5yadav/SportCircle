@@ -333,9 +333,9 @@ export default function ChatRoomScreen() {
       </View>
 
       <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : "padding"}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 60}
       >
         {/* Messages list */}
         {loading && messages.length === 0 ? (
@@ -348,6 +348,7 @@ export default function ChatRoomScreen() {
             data={messages}
             keyExtractor={(item) => item.id.toString()}
             contentContainerStyle={styles.messageScroll}
+            keyboardShouldPersistTaps="handled"
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
             renderItem={({ item }) => {
