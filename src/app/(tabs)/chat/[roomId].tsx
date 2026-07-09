@@ -405,17 +405,39 @@ export default function ChatRoomScreen() {
                             const totalVotes = (Object.values(item.poll_votes || {}) as number[][]).reduce((acc: number, curr: number[]) => acc + curr.length, 0);
                             const hasVoted = votesArray.includes(auth.user?.id || 0);
                             const percentage = totalVotes > 0 ? (votesArray.length / totalVotes) * 100 : 0;
+                            
+                            // Find option with maximum votes
+                            const pollVotesObj = item.poll_votes || {};
+                            const maxVotes = Math.max(
+                              ...Object.values(pollVotesObj).map((arr: any) => (arr || []).length),
+                              0
+                            );
+                            const isWinner = maxVotes > 0 && votesArray.length === maxVotes;
 
                             return (
                               <TouchableOpacity 
                                 key={idx} 
-                                style={[styles.pollOptionBtn, hasVoted ? styles.pollOptionVoted : null]}
+                                style={[
+                                  styles.pollOptionBtn, 
+                                  hasVoted ? styles.pollOptionVoted : null,
+                                  isWinner ? styles.pollOptionWinner : null
+                                ]}
                                 onPress={() => handleVote(item.id, idx)}
                               >
-                                <View style={[styles.pollVoteProgress, { width: `${percentage}%` }]} />
+                                <View 
+                                  style={[
+                                    styles.pollVoteProgress, 
+                                    { 
+                                      width: `${percentage}%`,
+                                      backgroundColor: isWinner ? "rgba(76, 175, 80, 0.28)" : "rgba(33, 150, 243, 0.15)"
+                                    }
+                                  ]} 
+                                />
                                 <View style={styles.pollOptionLabelRow}>
                                   <Text style={styles.pollOptionLabel}>{option}</Text>
-                                  <Text style={styles.pollOptionCount}>{votesArray.length} votes</Text>
+                                  <Text style={[styles.pollOptionCount, isWinner ? styles.pollOptionCountWinner : null]}>
+                                    {votesArray.length} votes
+                                  </Text>
                                 </View>
                               </TouchableOpacity>
                             );
@@ -820,6 +842,10 @@ const styles = StyleSheet.create({
   pollOptionVoted: {
     borderColor: COLORS.primary,
   },
+  pollOptionWinner: {
+    borderColor: "#4CAF50",
+    borderWidth: 1.5,
+  },
   pollVoteProgress: {
     position: "absolute",
     top: 0,
@@ -842,6 +868,10 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_400Regular",
     fontSize: 11,
     color: COLORS.textSecondary,
+  },
+  pollOptionCountWinner: {
+    color: "#2E7D32",
+    fontFamily: "Poppins_600SemiBold",
   },
   paymentCard: {
     padding: 4,
