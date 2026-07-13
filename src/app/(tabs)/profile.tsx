@@ -1,19 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
 import {
   Alert,
   Image,
   Modal,
-  SafeAreaView,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { logout, updateWallet } from "../../redux/authSlice";
 import { RootState } from "../../redux/store";
@@ -110,8 +110,8 @@ export default function ProfileScreen() {
   const userGames = games.filter((g: any) => g.is_joined || g.host_id === auth.user?.id);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+    <SafeAreaView style={styles.container} edges={[]}>
+      <StatusBar style="light" backgroundColor={COLORS.primary} translucent={false} />
       {/* 1. Curved Blue Top Header Background (Moves with scroll) */}
       <View style={styles.headertop}>
         <Text style={styles.headerUsername}>@{auth.user?.username || "UserName"}</Text>
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBackground,
     borderRadius: 24,
     marginHorizontal: SPACING.xl,
-    marginTop: -50, // Overlaps the blue header curve
+    marginTop: -60, // Overlaps the blue header curve
     padding: SPACING.xl,
     borderWidth: 1,
     borderColor: "#B1CEFC",

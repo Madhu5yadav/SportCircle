@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { Image, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { Provider } from "react-redux";
 import NotificationToast from "../components/NotificationToast";
 import store from "../redux/store";
@@ -37,63 +38,68 @@ export default function RootLayout() {
 
   if (!fontsLoaded && !fontError) {
     return (
-      <View style={[styles.splashContainer, { backgroundColor: COLORS.primary }]}>
-        <StatusBar style="light" backgroundColor={COLORS.primary} />
-        <Image
-          source={require("../../assets/images/splash-icon.png")}
-          style={styles.splashImage}
-          resizeMode="contain"
-        />
-      </View>
+      <SafeAreaView>
+        <View style={[styles.splashContainer, { backgroundColor: COLORS.primary }]}>
+          <StatusBar style="light" backgroundColor={COLORS.primary} />
+          <Image
+            source={require("../../assets/images/splash-icon.png")}
+            style={styles.splashImage}
+            resizeMode="contain"
+          />
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <Provider store={store}>
-        <StatusBar style="light" backgroundColor={COLORS.primary} />
-        {/* Global Notification Toast — visible on any screen */}
-        <NotificationToast />
-        <Stack
-          screenOptions={{
-            headerStyle: {
-              backgroundColor: COLORS.primary,
-            },
-            headerTintColor: COLORS.primary,
-            headerTitleStyle: {
-              fontFamily: "Poppins_600SemiBold",
-              color: COLORS.textPrimary,
-            },
-            contentStyle: {
-              backgroundColor: COLORS.primary,
-            },
-            animation: "slide_from_right",
-          }}
-        >
-          {/* Main Onboarding & Authentication Stack */}
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="walkthrough" options={{ headerShown: false }} />
-          <Stack.Screen name="login" options={{ headerShown: false }} />
-          <Stack.Screen name="signup" options={{ headerShown: false }} />
-          <Stack.Screen name="otp" options={{ title: "Verify OTP", headerBackTitle: "Back" }} />
-          <Stack.Screen name="personal-details" options={{ title: "Personal Details", headerBackTitle: "Back", headerLeft: () => null }} />
-          <Stack.Screen name="preferred-sports" options={{ title: "Preferred Sports", headerBackTitle: "Back", headerLeft: () => null }} />
-          <Stack.Screen name="forgot-password" options={{ title: "Forgot Password", headerBackTitle: "Back" }} />
-          <Stack.Screen name="reset-password" options={{ title: "Reset Password", headerBackTitle: "Back" }} />
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <Provider store={store}>
+          <StatusBar style="light" backgroundColor={COLORS.primary} translucent={false} />
+          {/* Global Notification Toast — visible on any screen */}
+          <NotificationToast />
+          <Stack
+            screenOptions={{
+              headerStyle: {
+                backgroundColor: COLORS.primary,
+              },
+              headerTintColor: COLORS.surface,
+              headerTitleStyle: {
+                color: COLORS.surface,
+                fontFamily: "Poppins_600SemiBold",
+                fontSize: 20,
+              },
+              contentStyle: {
+                backgroundColor: COLORS.background,
+              },
+              animation: "slide_from_right",
+            }}
+          >
+            {/* Main Onboarding & Authentication Stack */}
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+            <Stack.Screen name="walkthrough" options={{ headerShown: false }} />
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="signup" options={{ headerShown: false }} />
+            <Stack.Screen name="otp" options={{ title: "Verify OTP", headerBackTitle: "Back" }} />
+            <Stack.Screen name="personal-details" options={{ title: "Personal Details", headerBackTitle: "Back", headerLeft: () => null }} />
+            <Stack.Screen name="preferred-sports" options={{ title: "Preferred Sports", headerBackTitle: "Back", headerLeft: () => null }} />
+            <Stack.Screen name="forgot-password" options={{ title: "Forgot Password", headerBackTitle: "Back" }} />
+            <Stack.Screen name="reset-password" options={{ title: "Reset Password", headerBackTitle: "Back" }} />
 
-          {/* Main App Tabs */}
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            {/* Main App Tabs */}
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-          {/* Standalone Screens */}
-          <Stack.Screen name="notifications" options={{ headerShown: false }} />
-          <Stack.Screen name="friends" options={{ title: "Squad & Friends", headerBackTitle: "Back" }} />
-          <Stack.Screen name="search-users" options={{ title: "Search Users", headerBackTitle: "Back" }} />
-          <Stack.Screen name="pending-requests" options={{ title: "Pending Requests", headerBackTitle: "Back" }} />
-          <Stack.Screen name="host-game" options={{ title: "Host a Game", headerBackTitle: "Back" }} />
-          <Stack.Screen name="join-game" options={{ title: "Discover & Join Games", headerBackTitle: "Back" }} />
-        </Stack>
-      </Provider>
-    </GestureHandlerRootView>
+            {/* Standalone Screens */}
+            <Stack.Screen name="notifications" options={{ headerShown: false }} />
+            <Stack.Screen name="friends" options={{ title: "Squad & Friends", headerBackTitle: "Back" }} />
+            <Stack.Screen name="search-users" options={{ title: "Search Users", headerBackTitle: "Back" }} />
+            <Stack.Screen name="pending-requests" options={{ title: "Pending Requests", headerBackTitle: "Back" }} />
+            <Stack.Screen name="host-game" options={{ title: "Host a Game", headerBackTitle: "Back" }} />
+            <Stack.Screen name="join-game" options={{ title: "Discover & Join Games", headerBackTitle: "Back" }} />
+          </Stack>
+        </Provider>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
 

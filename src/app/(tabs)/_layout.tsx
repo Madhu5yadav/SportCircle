@@ -1,10 +1,10 @@
-import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS } from "../../theme/theme";
-import { Platform, Image, View, StyleSheet } from "react-native";
+import { Tabs } from "expo-router";
+import { Image, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelector } from "react-redux";
 import { RootState } from "../../redux/store";
+import { COLORS } from "../../theme/theme";
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
@@ -36,7 +36,7 @@ export default function TabsLayout() {
           fontSize: 11,
         },
         headerStyle: {
-          backgroundColor: COLORS.surface,
+          backgroundColor: COLORS.primary,
           borderBottomWidth: 1.5,
           borderBottomColor: COLORS.border,
           elevation: 0,
@@ -45,9 +45,9 @@ export default function TabsLayout() {
         headerTitleStyle: {
           fontFamily: "Poppins_600SemiBold",
           fontSize: 18,
-          color: COLORS.textPrimary,
+          color: COLORS.surface,
         },
-        headerTintColor: COLORS.primary,
+        headerTintColor: COLORS.surface,
       }}
     >
       <Tabs.Screen
@@ -56,10 +56,10 @@ export default function TabsLayout() {
           title: "Home",
           headerShown: false, // Custom header on home screen
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? "home" : "home-outline"} 
-              size={24} 
-              color={color} 
+            <Ionicons
+              name={focused ? "home" : "home-outline"}
+              size={24}
+              color={color}
             />
           ),
         }}
@@ -70,10 +70,10 @@ export default function TabsLayout() {
           title: "Explore",
           headerTitle: "Search & Filter",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? "search" : "search-outline"} 
-              size={24} 
-              color={color} 
+            <Ionicons
+              name={focused ? "search" : "search-outline"}
+              size={24}
+              color={color}
             />
           ),
         }}
@@ -84,10 +84,10 @@ export default function TabsLayout() {
           title: "Chat",
           headerTitle: "My Group Chats",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? "chatbubbles" : "chatbubbles-outline"} 
-              size={24} 
-              color={color} 
+            <Ionicons
+              name={focused ? "chatbubbles" : "chatbubbles-outline"}
+              size={24}
+              color={color}
             />
           ),
         }}
@@ -105,10 +105,10 @@ export default function TabsLayout() {
           title: "Booking",
           headerTitle: "Discover Turfs",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? "calendar" : "calendar-outline"} 
-              size={24} 
-              color={color} 
+            <Ionicons
+              name={focused ? "calendar" : "calendar-outline"}
+              size={24}
+              color={color}
             />
           ),
         }}
@@ -122,21 +122,21 @@ export default function TabsLayout() {
             if (profilePic) {
               return (
                 <View style={[
-                  styles.profileIconContainer, 
+                  styles.profileIconContainer,
                   focused && styles.profileIconContainerActive
                 ]}>
-                  <Image 
-                    source={{ uri: profilePic }} 
-                    style={styles.profileIcon} 
+                  <Image
+                    source={{ uri: profilePic }}
+                    style={styles.profileIcon}
                   />
                 </View>
               );
             }
             return (
-              <Ionicons 
-                name={focused ? "person" : "person-outline"} 
-                size={24} 
-                color={color} 
+              <Ionicons
+                name={focused ? "person" : "person-outline"}
+                size={24}
+                color={color}
               />
             );
           },

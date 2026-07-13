@@ -1,29 +1,29 @@
-import React, { useEffect, useState, useCallback } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  RefreshControl,
-  ActivityIndicator,
-  SafeAreaView,
-  Platform,
-} from "react-native";
-import { useRouter } from "expo-router";
-import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS, SPACING, SHADOWS } from "../theme/theme";
-import { RootState } from "../redux/store";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  setNotifications,
+  ActivityIndicator,
+  FlatList,
+  Platform,
+  RefreshControl,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Swipeable from "react-native-gesture-handler/Swipeable";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  deleteNotification,
   markAllAsRead,
   markAsRead,
-  deleteNotification,
   NotificationItem,
+  setNotifications,
 } from "../redux/notificationSlice";
+import { RootState } from "../redux/store";
 import api from "../services/api";
-import Swipeable from "react-native-gesture-handler/Swipeable";
+import { COLORS, SHADOWS, SPACING } from "../theme/theme";
 
 // ──────────────────── Helpers ────────────────────
 
@@ -301,7 +301,7 @@ export default function NotificationsScreen() {
           style={styles.backBtn}
           onPress={() => router.back()}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={COLORS.surface} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Notifications</Text>
         <View style={styles.headerRight}>
@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-    paddingTop: Platform.OS === "android" ? 40 : 0,
+    paddingTop: Platform.OS === "android" ? 30 : 0,
   },
   header: {
     flexDirection: "row",
@@ -394,8 +394,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     backgroundColor: COLORS.primary,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
     ...SHADOWS.medium,
   },
   backBtn: {
@@ -407,7 +405,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerTitle: {
-    fontFamily: "Poppins_700Bold",
+    fontFamily: "Poppins_600SemiBold",
     fontSize: 20,
     color: COLORS.surface,
   },

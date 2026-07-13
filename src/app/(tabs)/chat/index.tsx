@@ -1,22 +1,21 @@
-import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
-  Image, 
-  ActivityIndicator,
-  TextInput
-} from "react-native";
-import { useRouter } from "expo-router";
-import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS, SPACING, SHADOWS } from "../../../theme/theme";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
+import { useDispatch, useSelector } from "react-redux";
+import { setRooms } from "../../../redux/chatSlice";
 import { RootState } from "../../../redux/store";
 import api from "../../../services/api";
-import { setRooms } from "../../../redux/chatSlice";
 import { SocketService } from "../../../services/socket";
+import { COLORS, SHADOWS, SPACING } from "../../../theme/theme";
 
 const parseUTCDate = (dateStr: string): Date => {
   if (!dateStr) return new Date();
@@ -30,7 +29,7 @@ const parseUTCDate = (dateStr: string): Date => {
 export default function ChatListScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
-  
+
   const auth = useSelector((state: RootState) => state.auth);
   const { rooms } = useSelector((state: RootState) => state.chat);
 
@@ -43,7 +42,7 @@ export default function ChatListScreen() {
       const response = await api.get("/chat");
       const roomsData = response.data;
       dispatch(setRooms(roomsData));
-      
+
       // Auto-join socket rooms for real-time notifications
       roomsData.forEach((room: any) => {
         SocketService.joinChat(room.id);
@@ -130,7 +129,7 @@ export default function ChatListScreen() {
                     )}
                   </View>
                   <Text style={styles.lastMsgText} numberOfLines={1}>
-                    {lastMsg 
+                    {lastMsg
                       ? `${lastMsg.sender_username}: ${lastMsg.content || "[Image/Attachment]"}`
                       : "No messages yet. Send a greeting!"}
                   </Text>

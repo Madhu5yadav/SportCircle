@@ -1,25 +1,24 @@
-import React, { useState, useEffect } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  Image,
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
-  SafeAreaView,
   RefreshControl,
-  ScrollView
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
-import { useRouter } from "expo-router";
-import { useSelector, useDispatch } from "react-redux";
-import { Ionicons } from "@expo/vector-icons";
-import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from "../theme/theme";
+import { useDispatch, useSelector } from "react-redux";
+import { setFriends, setPendingRequests, setSquads } from "../redux/friendSlice";
 import { RootState } from "../redux/store";
 import api from "../services/api";
-import { setFriends, setPendingRequests, setSquads } from "../redux/friendSlice";
+import { COLORS, SHADOWS, SPACING } from "../theme/theme";
 
 interface Friend {
   friendship_id: number;
@@ -137,7 +136,7 @@ export default function FriendsScreen() {
 
     Alert.alert(
       isLeader ? "Disband Squad" : "Leave Squad",
-      isLeader 
+      isLeader
         ? "Are you sure you want to disband this squad? All members will be removed."
         : "Are you sure you want to leave this squad?",
       [
@@ -280,8 +279,8 @@ export default function FriendsScreen() {
       <View style={styles.sectionContainer}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Squad</Text>
-          <TouchableOpacity 
-            style={[styles.outlineBtn, { borderColor: COLORS.error }]} 
+          <TouchableOpacity
+            style={[styles.outlineBtn, { borderColor: COLORS.error }]}
             onPress={handleSquadLeaveOrDisband}
           >
             <Text style={[styles.outlineBtnText, { color: COLORS.error }]}>
@@ -295,7 +294,7 @@ export default function FriendsScreen() {
           {activeSquad.members.map((member) => {
             const memberIsLeader = member.role === "leader";
             const isSelf = member.user_id === auth.user?.id;
-            
+
             return (
               <TouchableOpacity
                 key={member.user_id}
@@ -325,14 +324,14 @@ export default function FriendsScreen() {
 
         {/* Action Buttons below Squad */}
         <View style={styles.squadActions}>
-          <TouchableOpacity 
-            style={[styles.squadBtn, styles.btnHost]} 
+          <TouchableOpacity
+            style={[styles.squadBtn, styles.btnHost]}
             onPress={() => router.push("/host-game")}
           >
             <Text style={styles.hostBtnText}>Host game</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.squadBtn, styles.btnJoin]} 
+          <TouchableOpacity
+            style={[styles.squadBtn, styles.btnJoin]}
             onPress={() => router.push("/join-game")}
           >
             <Text style={styles.joinBtnText}>Join game</Text>
@@ -346,7 +345,7 @@ export default function FriendsScreen() {
   const renderFriendsList = () => (
     <View style={styles.sectionContainer}>
       <Text style={styles.sectionTitle}>Your friends</Text>
-      
+
       {friendState.friends.length === 0 ? (
         <View style={styles.emptyFriendsCard}>
           <Ionicons name="people-outline" size={40} color={COLORS.cardBackground} />
@@ -360,8 +359,8 @@ export default function FriendsScreen() {
             const isOnline = index % 2 === 0;
 
             return (
-              <View 
-                key={friend.friend_id} 
+              <View
+                key={friend.friend_id}
                 style={[
                   styles.friendRow,
                   index === friendState.friends.length - 1 ? { borderBottomWidth: 0 } : null
@@ -421,9 +420,9 @@ export default function FriendsScreen() {
 
       {/* LEADER ACTIONS BOTTOM MODAL */}
       <Modal visible={showMemberMenu} transparent animationType="slide">
-        <TouchableOpacity 
-          style={styles.modalBg} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.modalBg}
+          activeOpacity={1}
           onPress={() => setShowMemberMenu(false)}
         >
           <View style={styles.modalContent}>

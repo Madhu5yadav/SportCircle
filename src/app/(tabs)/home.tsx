@@ -1,7 +1,8 @@
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import { StatusBar } from "expo-status-bar";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -44,6 +45,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [bannerIndex, setBannerIndex] = useState(0);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // Custom Data States
   const [nearbyGames, setNearbyGames] = useState<any[]>([]);
@@ -180,6 +182,21 @@ export default function HomeScreen() {
     setBannerIndex(Math.round(index));
   };
 
+  useEffect(() => {
+    if (loading && !refreshing) return;
+
+    const timer = setTimeout(() => {
+      const nextIndex = (bannerIndex + 1) % SPONSOR_BANNERS.length;
+      scrollViewRef.current?.scrollTo({
+        x: nextIndex * CAROUSEL_WIDTH,
+        animated: true,
+      });
+      setBannerIndex(nextIndex);
+    }, 4000); // Auto scroll every 4 seconds
+
+    return () => clearTimeout(timer);
+  }, [bannerIndex, loading, refreshing]);
+
   const handleAddFriend = async (friendId: number) => {
     try {
       await api.post("/friend-request", { friend_id: friendId });
@@ -203,7 +220,8 @@ export default function HomeScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safeContainer} edges={['top']}>
+    <SafeAreaView style={styles.safeContainer} >
+      <StatusBar style="light" backgroundColor={COLORS.primary} translucent={false} />
       {/* Top Header */}
       <View style={styles.header}>
         <Text style={styles.brandLogo}>SPORT CIRCLE</Text>
@@ -227,7 +245,7 @@ export default function HomeScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
         }
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 40 }}
       >
         {/* Greeting Section */}
         <View style={styles.greetingSection}>
@@ -249,6 +267,7 @@ export default function HomeScreen() {
             {/* Sponsor Banner Carousel */}
             <View style={styles.carouselContainer}>
               <ScrollView
+                ref={scrollViewRef}
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
@@ -427,7 +446,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
-    backgroundColor: "#F2F6FF", // Light blueish background like mockup
+    backgroundColor: COLORS.background, // Light blueish background like mockup
   },
   header: {
     flexDirection: "row",
