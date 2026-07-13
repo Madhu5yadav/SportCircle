@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { updateWallet } from "../../redux/authSlice";
 import { setGames } from "../../redux/gameSlice";
@@ -37,6 +37,7 @@ const SPONSOR_BANNERS = [
 export default function HomeScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
+  const insets = useSafeAreaInsets();
 
   const auth = useSelector((state: RootState) => state.auth);
   const game = useSelector((state: RootState) => state.game);
@@ -220,10 +221,13 @@ export default function HomeScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safeContainer} >
-      <StatusBar style="light" backgroundColor={COLORS.primary} translucent={false} />
+    <View style={styles.safeContainer} >
+      <StatusBar style="light" translucent={true} />
       {/* Top Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, {
+        height: 60 + insets.top,
+        paddingTop: insets.top + 10,
+      }]}>
         <Text style={styles.brandLogo}>SPORT CIRCLE</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/notifications")}>
@@ -439,7 +443,7 @@ export default function HomeScreen() {
           </>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -7,7 +7,6 @@ import {
   Image,
   Modal,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -398,25 +397,27 @@ export default function FriendsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      {loading && !refreshing ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[COLORS.primary]} />
-          }
-        >
-          {renderSearchBar()}
-          {renderPendingCard()}
-          {renderSquadSection()}
-          {renderFriendsList()}
-        </ScrollView>
-      )}
+    <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[COLORS.primary]} />
+        }
+      >
+        {loading && !refreshing ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        ) : (
+          <>
+            {renderSearchBar()}
+            {renderPendingCard()}
+            {renderSquadSection()}
+            {renderFriendsList()}
+          </>
+        )}
+      </ScrollView>
 
       {/* LEADER ACTIONS BOTTOM MODAL */}
       <Modal visible={showMemberMenu} transparent animationType="slide">
@@ -445,7 +446,7 @@ export default function FriendsScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -457,11 +458,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: SPACING.lg,
     paddingBottom: 40,
+    flexGrow: 1,
   },
   centerContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    minHeight: 300,
   },
   searchBarContainer: {
     marginBottom: SPACING.md,

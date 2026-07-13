@@ -6,7 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { Image, Platform, StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Provider } from "react-redux";
 import NotificationToast from "../components/NotificationToast";
 import store from "../redux/store";
@@ -38,16 +38,14 @@ export default function RootLayout() {
 
   if (!fontsLoaded && !fontError) {
     return (
-      <SafeAreaView>
-        <View style={[styles.splashContainer, { backgroundColor: COLORS.primary }]}>
-          <StatusBar style="light" backgroundColor={COLORS.primary} />
-          <Image
-            source={require("../../assets/images/splash-icon.png")}
-            style={styles.splashImage}
-            resizeMode="contain"
-          />
-        </View>
-      </SafeAreaView>
+      <View style={[styles.splashContainer, { backgroundColor: COLORS.primary }]}>
+        <StatusBar style="light" translucent={true} />
+        <Image
+          source={require("../../assets/images/splash-icon.png")}
+          style={styles.splashImage}
+          resizeMode="contain"
+        />
+      </View>
     );
   }
 
@@ -55,7 +53,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Provider store={store}>
-          <StatusBar style="light" backgroundColor={COLORS.primary} translucent={false} />
+          <StatusBar style="light" translucent={true} />
           {/* Global Notification Toast — visible on any screen */}
           <NotificationToast />
           <Stack
@@ -64,6 +62,7 @@ export default function RootLayout() {
                 backgroundColor: COLORS.primary,
               },
               headerTintColor: COLORS.surface,
+              statusBarTranslucent: true,
               headerTitleStyle: {
                 color: COLORS.surface,
                 fontFamily: "Poppins_600SemiBold",

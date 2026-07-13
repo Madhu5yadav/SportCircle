@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import { logout, updateWallet } from "../../redux/authSlice";
 import { RootState } from "../../redux/store";
@@ -26,6 +26,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
   const auth = useSelector((state: RootState) => state.auth);
+  const insets = useSafeAreaInsets();
 
   // States
   const [preferredSports, setPreferredSports] = useState<string[]>([]);
@@ -110,10 +111,15 @@ export default function ProfileScreen() {
   const userGames = games.filter((g: any) => g.is_joined || g.host_id === auth.user?.id);
 
   return (
-    <SafeAreaView style={styles.container} edges={[]}>
-      <StatusBar style="light" backgroundColor={COLORS.primary} translucent={false} />
+    <View style={styles.container}>
+      <StatusBar style="light" translucent={true} />
       {/* 1. Curved Blue Top Header Background (Moves with scroll) */}
-      <View style={styles.headertop}>
+      <View style={[styles.headertop,
+      {
+        height: 60 + insets.top,
+        paddingTop: insets.top
+      }
+      ]}>
         <Text style={styles.headerUsername}>@{auth.user?.username || "UserName"}</Text>
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -412,7 +418,7 @@ export default function ProfileScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -429,10 +435,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     zIndex: 100,
     width: '100%',
-    height: 90,
     justifyContent: "center",
     alignItems: "center",
-    paddingTop: 30,
     ...SHADOWS.medium,
   },
   headerBackground: {

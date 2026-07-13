@@ -1,18 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  Platform,
   RefreshControl,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import Swipeable from "react-native-gesture-handler/Swipeable";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
 import {
   deleteNotification,
@@ -119,6 +119,7 @@ const groupNotificationsByDate = (
 export default function NotificationsScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
+  const insets = useSafeAreaInsets();
 
   const notifications = useSelector(
     (state: RootState) => state.notification.notifications
@@ -294,9 +295,13 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar style="light" translucent={true} />
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, {
+        height: 60 + insets.top,
+        paddingTop: insets.top
+      }]}>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => router.back()}
@@ -354,7 +359,7 @@ export default function NotificationsScreen() {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -385,7 +390,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-    paddingTop: Platform.OS === "android" ? 30 : 0,
   },
   header: {
     flexDirection: "row",

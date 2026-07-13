@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -8,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch } from "react-redux";
 import { CONFIG } from "../constants/config";
 import { setCredentials } from "../redux/authSlice";
@@ -26,6 +27,7 @@ import { COLORS, SHADOWS, SPACING } from "../theme/theme";
 export default function LoginScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
+  const insets = useSafeAreaInsets();
 
   const [usernameOrMobile, setUsernameOrMobile] = useState("");
   const [password, setPassword] = useState("");
@@ -173,11 +175,14 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, {
+      paddingTop: insets.top,
+    }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
+        <StatusBar style="dark" translucent={true} />
         <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
           {/* Brand Logo & Header */}
           <View style={styles.header}>
@@ -339,7 +344,7 @@ export default function LoginScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 

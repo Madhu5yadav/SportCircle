@@ -1,25 +1,25 @@
+import { Ionicons } from "@expo/vector-icons";
+import { yupResolver } from "@hookform/resolvers/yup";
+import axios from "axios";
+import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TextInput, 
-  TouchableOpacity, 
-  SafeAreaView, 
-  ScrollView, 
+import { Controller, useForm } from "react-hook-form";
+import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
-import { useRouter } from "expo-router";
-import { useForm, Controller } from "react-hook-form";
-import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
-import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from "../theme/theme";
-import { Ionicons } from "@expo/vector-icons";
-import axios from "axios";
 import { CONFIG } from "../constants/config";
+import { COLORS, SHADOWS, SPACING } from "../theme/theme";
 
 // Validation Schema
 const signupSchema = yup.object({
@@ -71,15 +71,15 @@ export default function SignupScreen() {
       }, { timeout: 10000 });
 
       Alert.alert(
-        "Verification Required", 
+        "Verification Required",
         "A verification OTP has been sent to your mobile number.",
         [
-          { 
-            text: "Verify Now", 
-            onPress: () => router.push({ 
-              pathname: "/otp", 
-              params: { mobile: data.mobile, simulatedOtp: response.data.otp } 
-            }) 
+          {
+            text: "Verify Now",
+            onPress: () => router.push({
+              pathname: "/otp",
+              params: { mobile: data.mobile, simulatedOtp: response.data.otp }
+            })
           }
         ]
       );
@@ -92,11 +92,12 @@ export default function SignupScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+    <View style={styles.container}>
+      <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
+        <StatusBar style="dark" translucent={true} />
         <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
           {/* Logo & Header */}
           <View style={styles.header}>
@@ -176,10 +177,10 @@ export default function SignupScreen() {
                   )}
                 />
                 <TouchableOpacity onPress={() => setSecureText(!secureText)}>
-                  <Ionicons 
-                    name={secureText ? "eye-off-outline" : "eye-outline"} 
-                    size={20} 
-                    color={COLORS.textSecondary} 
+                  <Ionicons
+                    name={secureText ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color={COLORS.textSecondary}
                   />
                 </TouchableOpacity>
               </View>
@@ -208,10 +209,10 @@ export default function SignupScreen() {
                   )}
                 />
                 <TouchableOpacity onPress={() => setSecureConfirmText(!secureConfirmText)}>
-                  <Ionicons 
-                    name={secureConfirmText ? "eye-off-outline" : "eye-outline"} 
-                    size={20} 
-                    color={COLORS.textSecondary} 
+                  <Ionicons
+                    name={secureConfirmText ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color={COLORS.textSecondary}
                   />
                 </TouchableOpacity>
               </View>
@@ -219,8 +220,8 @@ export default function SignupScreen() {
             </View>
 
             {/* Submit */}
-            <TouchableOpacity 
-              style={[styles.btn, loading ? styles.btnDisabled : null]} 
+            <TouchableOpacity
+              style={[styles.btn, loading ? styles.btnDisabled : null]}
               onPress={handleSubmit(onSubmit)}
               disabled={loading}
             >
@@ -244,7 +245,7 @@ export default function SignupScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
