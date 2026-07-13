@@ -139,21 +139,11 @@ export default function HomeScreen() {
 
       // 3. Fetch friend suggestions (users that are not friends yet)
       const suggestionsRes = await api.get("/friends", { params: { suggestions: true } });
-      // We will fallback to dummy player lists if database suggestions is empty
       const normalizedSuggestions = (suggestionsRes.data || []).map((p: any) => ({
         ...p,
         id: p.id || p.friend_id
       }));
-      setSuggestedPlayers(
-        normalizedSuggestions.length > 0
-          ? normalizedSuggestions
-          : [
-            { id: 101, username: "michael05", profile_pic: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=150" },
-            { id: 102, username: "Kabi_lan", profile_pic: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=150" },
-            { id: 103, username: "Velu10", profile_pic: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150" },
-            { id: 104, username: "Kau_si", profile_pic: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=150" }
-          ]
-      );
+      setSuggestedPlayers(normalizedSuggestions);
 
       // 4. Fetch notifications and store in Redux
       const notifsRes = await api.get("/notifications");
@@ -418,25 +408,37 @@ export default function HomeScreen() {
             </View>
 
             {/* Players You Might Know */}
-            <View style={[styles.section, { paddingHorizontal: 0, paddingLeft: SPACING.xl }]}>
-              <View style={[styles.sectionHeader, { paddingRight: SPACING.xl }]}>
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
                 <Text style={styles.sectionHeading}>Players you might know</Text>
                 <TouchableOpacity onPress={() => router.push("/friends")}>
                   <Ionicons name="arrow-forward" size={24} color={COLORS.textPrimary} />
                 </TouchableOpacity>
               </View>
               <View style={styles.playersContainer}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
-                  {suggestedPlayers.map((player) => (
-                    <View key={player.friend_id || player.id} style={styles.playerCard}>
-                      <Image source={{ uri: player.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150" }} style={styles.playerAvatar} />
-                      <Text style={styles.playerName} numberOfLines={1}>{player.username}</Text>
-                      <TouchableOpacity style={styles.addFriendBtn} onPress={() => handleAddFriend(player.friend_id || player.id)}>
-                        <Text style={styles.addFriendBtnText}>Add</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </ScrollView>
+                {suggestedPlayers.length > 0 ? (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
+                    {suggestedPlayers.map((player) => (
+                      <View key={player.friend_id || player.id} style={styles.playerCard}>
+                        <TouchableOpacity 
+                          style={{ alignItems: "center" }}
+                          onPress={() => router.push({ pathname: "/user-profile", params: { userId: player.friend_id || player.id } })}
+                        >
+                          <Image source={{ uri: player.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150" }} style={styles.playerAvatar} />
+                          <Text style={styles.playerName} numberOfLines={1}>{player.username}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.addFriendBtn} onPress={() => handleAddFriend(player.friend_id || player.id)}>
+                          <Text style={styles.addFriendBtnText}>Add</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <View style={styles.emptySuggestionsContainer}>
+                    <Ionicons name="people-outline" size={20} color={COLORS.textSecondary} />
+                    <Text style={styles.emptySuggestionsText}>No other user exists</Text>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -752,8 +754,7 @@ const styles = StyleSheet.create({
   playersContainer: {
     backgroundColor: COLORS.cardBackground,
     padding: SPACING.lg,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
+    borderRadius: 16,
   },
   playerCard: {
     alignItems: "center",
@@ -794,6 +795,21 @@ const styles = StyleSheet.create({
   emptyText: {
     fontFamily: "Poppins_400Regular",
     fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  emptySuggestionsContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: SPACING.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: SPACING.xl,
+    flexDirection: "row",
+    gap: 8,
+  },
+  emptySuggestionsText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 13,
     color: COLORS.textSecondary,
   },
   skeletonContainer: {

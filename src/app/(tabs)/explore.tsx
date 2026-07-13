@@ -10,7 +10,7 @@ import {
   ScrollView,
   Alert
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from "../../theme/theme";
@@ -23,6 +23,7 @@ const SPORTS = ["Cricket", "Football", "Basketball", "Badminton", "Volleyball", 
 const TIME_SLOTS = ["Morning", "Afternoon", "Evening", "Night", "All"];
 
 export default function ExploreScreen() {
+  const router = useRouter();
   const dispatch = useDispatch();
   const params = useLocalSearchParams<{ gameId?: string }>();
   
@@ -224,10 +225,13 @@ export default function ExploreScreen() {
                     <Ionicons name="location-outline" size={16} color={COLORS.textSecondary} />
                     <Text style={styles.detailText} numberOfLines={1}>{item.location}</Text>
                   </View>
-                  <View style={styles.detailRow}>
+                  <TouchableOpacity 
+                    style={styles.detailRow}
+                    onPress={() => router.push({ pathname: "/user-profile", params: { userId: item.host_id } })}
+                  >
                     <Ionicons name="person-outline" size={16} color={COLORS.textSecondary} />
-                    <Text style={styles.detailText}>Host: @{item.host_username}</Text>
-                  </View>
+                    <Text style={[styles.detailText, { color: COLORS.primary }]}>Host: @{item.host_username}</Text>
+                  </TouchableOpacity>
                 </View>
 
                 {/* Footer Controls */}

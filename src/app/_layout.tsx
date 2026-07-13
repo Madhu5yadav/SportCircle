@@ -95,6 +95,7 @@ export default function RootLayout() {
             <Stack.Screen name="pending-requests" options={{ title: "Pending Requests", headerBackTitle: "Back" }} />
             <Stack.Screen name="host-game" options={{ title: "Host a Game", headerBackTitle: "Back" }} />
             <Stack.Screen name="join-game" options={{ title: "Discover & Join Games", headerBackTitle: "Back" }} />
+            <Stack.Screen name="user-profile" options={{ headerShown: false }} />
           </Stack>
         </Provider>
       </GestureHandlerRootView>

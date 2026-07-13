@@ -298,6 +298,13 @@ export default function FriendsScreen() {
               <TouchableOpacity
                 key={member.user_id}
                 style={styles.squadMemberRow}
+                onPress={() => {
+                  if (isSelf) {
+                    router.push("/(tabs)/profile");
+                  } else {
+                    router.push({ pathname: "/user-profile", params: { userId: member.user_id } });
+                  }
+                }}
                 onLongPress={() => handleSquadMemberLongPress(member)}
                 delayLongPress={300}
                 activeOpacity={0.7}
@@ -365,7 +372,10 @@ export default function FriendsScreen() {
                   index === friendState.friends.length - 1 ? { borderBottomWidth: 0 } : null
                 ]}
               >
-                <View style={styles.friendInfo}>
+                <TouchableOpacity 
+                  style={styles.friendInfo}
+                  onPress={() => router.push({ pathname: "/user-profile", params: { userId: friend.friend_id } })}
+                >
                   <View>
                     <Image
                       source={{ uri: friend.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150" }}
@@ -374,7 +384,7 @@ export default function FriendsScreen() {
                     {isOnline && <View style={styles.onlineDot} />}
                   </View>
                   <Text style={styles.friendName}>@{friend.username}</Text>
-                </View>
+                </TouchableOpacity>
 
                 {inSquad ? (
                   <View style={styles.inSquadBadge}>

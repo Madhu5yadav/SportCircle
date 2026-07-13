@@ -118,6 +118,29 @@ class ProfileResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class PublicProfileUserResponse(BaseModel):
+    id: int
+    username: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    dob: Optional[date] = None
+    gender: Optional[str] = None
+    about: Optional[str] = None
+    profile_pic: Optional[str] = None
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class PublicProfileResponse(BaseModel):
+    user: PublicProfileUserResponse
+    preferred_sports: List[str]
+    playing_time: List[str]
+    friendship_status: str
+    friendship_id: Optional[int] = None
+    mutual_friends_count: int
+    class Config:
+        from_attributes = True
+
 class ProfileUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None

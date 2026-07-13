@@ -248,12 +248,6 @@ async def leave_game(
             detail="Game not found"
         )
         
-    if game.host_id == current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Host cannot leave their own game. Delete or cancel instead."
-        )
-        
     # Leave
     existing = db.query(Participant).filter(
         Participant.game_id == id,
@@ -266,23 +260,69 @@ async def leave_game(
             detail="You are not a participant in this game"
         )
         
-    db.delete(existing)
-    db.commit()
+    is_host = (game.host_id == current_user.id)
     
-    # Broadcast count update
-    joined_count = db.query(Participant).filter(Participant.game_id == id).count()
-    await broadcast_game_joined_update(game.id, joined_count, game.player_count)
-    
-    # Notify host
-    NotificationService.create_notification(
-        user_id=game.host_id,
-        title="Player Left",
-        message=f"{current_user.username} left your game '{game.name}'",
-        notif_type="system",
-        db=db
-    )
-    
-    return {"message": "Left game successfully", "joined_count": joined_count}
+    if is_host:
+        # Check if there are other participants
+        other_participant = db.query(Participant).filter(
+            Participant.game_id == id,
+            Participant.user_id != current_user.id
+        ).order_by(Participant.joined_at.asc(), Participant.id.asc()).first()
+        
+        if other_participant:
+            # Promote the next joined player to Host
+            new_host_id = other_participant.user_id
+            game.host_id = new_host_id
+            
+            # Remove the current host from the participants list
+            db.delete(existing)
+            db.commit()
+            
+            # Notify the new host
+            NotificationService.create_notification(
+                user_id=new_host_id,
+                title="You are now the Host!",
+                message=f"You have been made the host of the game '{game.name}' because the previous host left.",
+                notif_type="system",
+                db=db
+            )
+            
+            # Broadcast the updated player count
+            joined_count = db.query(Participant).filter(Participant.game_id == id).count()
+            await broadcast_game_joined_update(game.id, joined_count, game.player_count)
+            
+            return {
+                "message": "Left game successfully. Host role transferred.",
+                "joined_count": joined_count,
+                "host_transferred": True
+            }
+        else:
+            # No other members, delete the game
+            db.delete(game)
+            db.commit()
+            return {
+                "message": "Left game successfully. Game deleted as there were no other participants.",
+                "joined_count": 0,
+                "game_deleted": True
+            }
+    else:
+        # Non-host participant leaving
+        db.delete(existing)
+        db.commit()
+        
+        joined_count = db.query(Participant).filter(Participant.game_id == id).count()
+        await broadcast_game_joined_update(game.id, joined_count, game.player_count)
+        
+        # Notify host
+        NotificationService.create_notification(
+            user_id=game.host_id,
+            title="Player Left",
+            message=f"{current_user.username} left your game '{game.name}'",
+            notif_type="system",
+            db=db
+        )
+        
+        return {"message": "Left game successfully", "joined_count": joined_count}
 
 
 @router.delete("/game/{id}")

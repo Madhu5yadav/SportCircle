@@ -179,7 +179,9 @@ export default function JoinGameScreen() {
                   </View>
                   
                   <Text style={styles.gameName}>{item.name}</Text>
-                  <Text style={styles.gameHost}>Host: @{item.host_username}</Text>
+                  <TouchableOpacity onPress={() => router.push({ pathname: "/user-profile", params: { userId: item.host_id } })}>
+                    <Text style={[styles.gameHost, { color: COLORS.primary }]}>Host: @{item.host_username}</Text>
+                  </TouchableOpacity>
                   <Text style={styles.gameLoc} numberOfLines={1}><Ionicons name="location-outline" /> {item.location}</Text>
                   <Text style={styles.gameDate}><Ionicons name="calendar-outline" /> {item.game_date} • {item.start_time.slice(0,5)}</Text>
                   

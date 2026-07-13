@@ -1,13 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, and_
 from typing import List
 import os
 import shutil
 import uuid
 
 from app.database.db import get_db
-from app.models.models import User, PreferredSport, Wallet, Settings
-from app.schemas.schemas import ProfileResponse, ProfileUpdate, SettingsResponse, UserResponse, WalletResponse
+from app.models.models import User, PreferredSport, Wallet, Settings, Friend
+from app.schemas.schemas import (
+    ProfileResponse, ProfileUpdate, SettingsResponse, UserResponse, WalletResponse,
+    PublicProfileResponse, PublicProfileUserResponse
+)
 from app.middleware.auth import get_current_user
 
 router = APIRouter(tags=["User Profile"])
@@ -158,3 +162,92 @@ def upload_profile_photo(
     db.refresh(current_user)
     
     return {"message": "Profile photo uploaded successfully.", "url": url}
+
+
+@router.get("/profile/{user_id}", response_model=PublicProfileResponse)
+def get_public_profile(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+        
+    # Fetch Preferred Sports
+    pref_sports = db.query(PreferredSport).filter(PreferredSport.user_id == user_id).all()
+    sports_list = [s.sport_name for s in pref_sports]
+    
+    # Extract playing times
+    playing_time_list = []
+    if user.about and user.about.startswith("Playing:"):
+        times_str = user.about.split("Playing:")[1]
+        playing_time_list = [t.strip() for t in times_str.split(",") if t.strip()]
+
+    # Check friendship status
+    status_val = "none"
+    friendship_id = None
+    
+    if user_id == current_user.id:
+        status_val = "self"
+    else:
+        friendship = db.query(Friend).filter(
+            or_(
+                and_(Friend.user_id == current_user.id, Friend.friend_id == user_id),
+                and_(Friend.user_id == user_id, Friend.friend_id == current_user.id)
+            )
+        ).first()
+        if friendship:
+            friendship_id = friendship.id
+            if friendship.status == "accepted":
+                status_val = "accepted"
+            elif friendship.status == "pending":
+                if friendship.user_id == current_user.id:
+                    status_val = "pending_sent"
+                else:
+                    status_val = "pending_received"
+
+    # Compute mutual friends
+    my_friend_ids = db.query(Friend.user_id).filter(
+        and_(Friend.friend_id == current_user.id, Friend.status == "accepted")
+    ).union(
+        db.query(Friend.friend_id).filter(
+            and_(Friend.user_id == current_user.id, Friend.status == "accepted")
+        )
+    ).all()
+    my_friend_ids_set = {r[0] for r in my_friend_ids}
+    
+    u_friend_ids = db.query(Friend.user_id).filter(
+        and_(Friend.friend_id == user_id, Friend.status == "accepted")
+    ).union(
+        db.query(Friend.friend_id).filter(
+            and_(Friend.user_id == user_id, Friend.status == "accepted")
+        )
+    ).all()
+    u_friend_ids_set = {r[0] for r in u_friend_ids}
+    
+    mutual_count = len(my_friend_ids_set.intersection(u_friend_ids_set))
+
+    user_res = PublicProfileUserResponse(
+        id=user.id,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        dob=user.dob,
+        gender=user.gender,
+        about=user.about,
+        profile_pic=user.profile_pic,
+        created_at=user.created_at
+    )
+
+    return PublicProfileResponse(
+        user=user_res,
+        preferred_sports=sports_list,
+        playing_time=playing_time_list,
+        friendship_status=status_val,
+        friendship_id=friendship_id,
+        mutual_friends_count=mutual_count
+    )

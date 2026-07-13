@@ -329,7 +329,9 @@ export default function ChatRoomScreen() {
                 <View style={[styles.bubbleWrapper, isOwn ? styles.bubbleOwnWrapper : styles.bubbleOtherWrapper]}>
                   {/* Sender metadata */}
                   {!isOwn && (
-                    <Text style={styles.senderName}>{item.sender_username}</Text>
+                    <TouchableOpacity onPress={() => router.push({ pathname: "/user-profile", params: { userId: item.sender_id } })}>
+                      <Text style={styles.senderName}>@{item.sender_username}</Text>
+                    </TouchableOpacity>
                   )}
                   
                   {/* Bubble Surface */}
