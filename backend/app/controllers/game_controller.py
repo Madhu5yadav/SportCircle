@@ -5,12 +5,16 @@ from typing import List, Optional
 from math import radians, cos, sin, asin, sqrt
 
 from app.database.db import get_db
-from app.models.models import User, Game, Participant, ChatRoom, Notification, SquadMember, BookingAccessRequest
+<<<<<<< HEAD
+from app.models.models import User, Game, Participant, ChatRoom, Notification, SquadMember
 from app.schemas.schemas import GameCreate, GameResponse, ParticipantResponse, GameUpdate
+=======
+from app.models.models import User, Game, Participant, ChatRoom, Notification, BookingAccessRequest
+from app.schemas.schemas import GameCreate, GameResponse, ParticipantResponse
+>>>>>>> 682ccc76766c0b1d75339493883d97e0b45e2a17
 from app.middleware.auth import get_current_user
 from app.services.socket_service import broadcast_game_joined_update
 from app.services.notification_service import NotificationService
-
 
 router = APIRouter(tags=["Games"])
 

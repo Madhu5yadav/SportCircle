@@ -55,6 +55,7 @@ try:
         except Exception:
             pass
 
+<<<<<<< HEAD
         # Add level to preferred_sports if not exists
         try:
             conn.execute(text("ALTER TABLE preferred_sports ADD COLUMN level VARCHAR(20) DEFAULT 'Beginner';"))
@@ -90,9 +91,7 @@ try:
             conn.execute(text("ALTER TABLE participants ADD COLUMN status VARCHAR(20) DEFAULT 'joined';"))
             conn.commit()
             print("Migration: Added status column to participants table.")
-        except Exception:
-            pass
-
+=======
         # Add game_id to bookings if not exists
         try:
             conn.execute(text("ALTER TABLE bookings ADD COLUMN game_id INT DEFAULT NULL;"))
@@ -100,6 +99,7 @@ try:
             conn.execute(text("ALTER TABLE bookings ADD CONSTRAINT fk_bookings_game FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE SET NULL;"))
             conn.commit()
             print("Migration: Added game_id column to bookings table.")
+>>>>>>> 682ccc76766c0b1d75339493883d97e0b45e2a17
         except Exception:
             pass
 except Exception as e:
