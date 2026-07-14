@@ -1,12 +1,15 @@
 import Constants from "expo-constants";
 
-// Physical device via Expo Go needs the PC's LAN IP (not localhost/10.0.2.2,
-// which only work for emulators). Update if your PC's IP changes.
 const getDevHost = () => {
   if (Constants.expoConfig?.hostUri) {
-    return Constants.expoConfig.hostUri.split(":").shift() || "10.191.211.104";
+    const host = Constants.expoConfig.hostUri.split(":").shift();
+    // If the host is a tunnel URL (like exp.direct or ngrok), it won't work for the backend port 8000.
+    // In that case, we fall back to the actual LAN IP of the host machine.
+    if (host && !host.includes("exp.direct") && !host.includes("ngrok")) {
+      return host;
+    }
   }
-  return "10.191.211.104";
+  return "192.168.0.14"; // Host's active Wi-Fi IP
 };
 
 const DEV_HOST = getDevHost();

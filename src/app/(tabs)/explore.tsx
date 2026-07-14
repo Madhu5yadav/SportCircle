@@ -21,27 +21,27 @@ import { RootState } from "../../redux/store";
 import api from "../../services/api";
 import { setGames } from "../../redux/gameSlice";
 
-const ALL_SPORTS = [
-  "Badminton",
-  "Basketball",
-  "Bowling",
-  "Cricket",
-  "Football",
-  "Golf",
-  "Hockey",
-  "Kabaddi",
-  "Kho Kho",
-  "Pickleball",
-  "Rugby",
-  "Running",
-  "Swimming",
-  "Table Tennis",
-  "Tennis",
-  "Volleyball",
-  "All"
-];
-
 export default function ExploreScreen() {
+  const ALL_SPORTS = [
+    "Badminton",
+    "Basketball",
+    "Bowling",
+    "Cricket",
+    "Football",
+    "Golf",
+    "Hockey",
+    "Kabaddi",
+    "Kho Kho",
+    "Pickleball",
+    "Rugby",
+    "Running",
+    "Swimming",
+    "Table Tennis",
+    "Tennis",
+    "Volleyball",
+    "All"
+  ];
+
   const router = useRouter();
   const dispatch = useDispatch();
   const params = useLocalSearchParams<{ gameId?: string }>();

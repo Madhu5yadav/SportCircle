@@ -1535,6 +1535,72 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
 
+  // ── Custom Image Preview ──────────────────────────────────
+  previewContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  previewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: (StatusBar.currentHeight || 24) + 12,
+    paddingHorizontal: 16,
+    height: 80,
+  },
+  previewBackBtn: {
+    padding: 4,
+  },
+  previewHeaderTitle: {
+    color: "#fff",
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 18,
+  },
+  previewImageContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+  },
+  previewBottomBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    paddingBottom: 36,
+    paddingTop: 16,
+    backgroundColor: "rgba(0,0,0,0.2)",
+  },
+  previewCancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewCancelText: {
+    color: "#fff",
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+  },
+  previewSendBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    justifyContent: "center",
+  },
+  previewSendText: {
+    color: "#fff",
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+  },
+
   // ── Fullscreen Image Viewer ──────────────────────────────
   viewerBg: {
     flex: 1,

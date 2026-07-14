@@ -10,7 +10,8 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Alert
 } from "react-native";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -196,6 +197,51 @@ export default function NotificationsScreen() {
       } catch (error) {
         console.log("Error marking notification as read:", error);
       }
+    }
+
+    // Check if booking access request
+    if (item.type === "game_request" && item.message.includes("requested access to book")) {
+      try {
+        const requestsRes = await api.get("/game/booking-access-requests");
+        const match = requestsRes.data.find((r: any) => item.message.includes(r.username));
+        if (match) {
+          Alert.alert(
+            "Booking Access Request",
+            item.message,
+            [
+              { text: "Cancel", style: "cancel" },
+              { 
+                text: "Reject", 
+                style: "destructive", 
+                onPress: async () => {
+                  try {
+                    await api.post(`/game/booking-access-request/${match.id}/reject`);
+                    Alert.alert("Success", "Access request rejected.");
+                  } catch (e) {
+                    Alert.alert("Error", "Could not reject request.");
+                  }
+                }
+              },
+              { 
+                text: "Approve", 
+                onPress: async () => {
+                  try {
+                    await api.post(`/game/booking-access-request/${match.id}/approve`);
+                    Alert.alert("Success", "Access request approved!");
+                  } catch (e) {
+                    Alert.alert("Error", "Could not approve request.");
+                  }
+                }
+              }
+            ]
+          );
+        } else {
+          Alert.alert("Already Processed", "This request has already been handled.");
+        }
+      } catch (err) {
+        console.log("Error handling booking access notification:", err);
+      }
+      return;
     }
 
     // Navigate based on type

@@ -92,6 +92,16 @@ try:
             print("Migration: Added status column to participants table.")
         except Exception:
             pass
+
+        # Add game_id to bookings if not exists
+        try:
+            conn.execute(text("ALTER TABLE bookings ADD COLUMN game_id INT DEFAULT NULL;"))
+            conn.commit()
+            conn.execute(text("ALTER TABLE bookings ADD CONSTRAINT fk_bookings_game FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE SET NULL;"))
+            conn.commit()
+            print("Migration: Added game_id column to bookings table.")
+        except Exception:
+            pass
 except Exception as e:
     print("Error synchronizing database tables, please verify MySQL connectivity:", e)
 

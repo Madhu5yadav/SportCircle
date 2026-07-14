@@ -5,11 +5,12 @@ from typing import List, Optional
 from math import radians, cos, sin, asin, sqrt
 
 from app.database.db import get_db
-from app.models.models import User, Game, Participant, ChatRoom, Notification, SquadMember
+from app.models.models import User, Game, Participant, ChatRoom, Notification, SquadMember, BookingAccessRequest
 from app.schemas.schemas import GameCreate, GameResponse, ParticipantResponse, GameUpdate
 from app.middleware.auth import get_current_user
 from app.services.socket_service import broadcast_game_joined_update
 from app.services.notification_service import NotificationService
+
 
 router = APIRouter(tags=["Games"])
 
@@ -540,3 +541,205 @@ def get_game_details(game_id: int, user: User, db: Session) -> Optional[GameResp
         is_joined=is_joined,
         participants=parts_list
     )
+
+
+@router.get("/my-joined-games", response_model=List[GameResponse])
+def get_my_joined_games(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    joined_game_ids = db.query(Participant.game_id).filter(Participant.user_id == current_user.id).all()
+    game_ids = [g[0] for g in joined_game_ids]
+    
+    games = db.query(Game).filter(Game.id.in_(game_ids)).all()
+    
+    filtered_games = []
+    for g in games:
+        joined_count = db.query(Participant).filter(Participant.game_id == g.id).count()
+        parts_list = []
+        for p in g.participants:
+            parts_list.append(ParticipantResponse(
+                user_id=p.user.id,
+                username=p.user.username,
+                profile_pic=p.user.profile_pic,
+                joined_at=p.joined_at
+            ))
+            
+        res = GameResponse(
+            id=g.id,
+            host_id=g.host_id,
+            host_username=g.host.username,
+            host_profile_pic=g.host.profile_pic,
+            name=g.name,
+            sport_type=g.sport_type,
+            location=g.location,
+            latitude=g.latitude,
+            longitude=g.longitude,
+            game_date=g.game_date,
+            start_time=g.start_time,
+            end_time=g.end_time,
+            access=g.access,
+            player_count=g.player_count,
+            entry_fee=g.entry_fee,
+            gender=g.gender,
+            equipment_required=g.equipment_required,
+            description=g.description,
+            created_at=g.created_at,
+            joined_count=joined_count,
+            is_joined=True,
+            participants=parts_list
+        )
+        filtered_games.append(res)
+    return filtered_games
+
+
+@router.get("/game/{game_id}/booking-access")
+def get_booking_access(
+    game_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    game = db.query(Game).filter(Game.id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+        
+    if game.host_id == current_user.id:
+        return {"has_access": True, "status": "approved"}
+        
+    req = db.query(BookingAccessRequest).filter(
+        BookingAccessRequest.game_id == game_id,
+        BookingAccessRequest.user_id == current_user.id
+    ).order_by(BookingAccessRequest.id.desc()).first()
+    
+    if not req:
+        return {"has_access": False, "status": "none"}
+        
+    return {
+        "has_access": req.status == "approved",
+        "status": req.status
+    }
+
+
+@router.post("/game/{game_id}/request-booking-access")
+def request_booking_access(
+    game_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    game = db.query(Game).filter(Game.id == game_id).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+        
+    part = db.query(Participant).filter(
+        Participant.game_id == game_id,
+        Participant.user_id == current_user.id
+    ).first()
+    if not part:
+        raise HTTPException(status_code=400, detail="You must be joined in this game to request access to book")
+        
+    if game.host_id == current_user.id:
+        return {"message": "You are the host, you already have booking access."}
+        
+    existing = db.query(BookingAccessRequest).filter(
+        BookingAccessRequest.game_id == game_id,
+        BookingAccessRequest.user_id == current_user.id,
+        BookingAccessRequest.status == "pending"
+    ).first()
+    if existing:
+        return {"message": "Booking access request already pending"}
+        
+    req = BookingAccessRequest(
+        game_id=game_id,
+        user_id=current_user.id,
+        status="pending"
+    )
+    db.add(req)
+    
+    NotificationService.create_notification(
+        user_id=game.host_id,
+        title="Booking Access Request",
+        message=f"{current_user.username} has requested access to book a venue for your game '{game.name}'.",
+        notif_type="game_request",
+        db=db
+    )
+    db.commit()
+    return {"message": "Request sent successfully"}
+
+
+@router.get("/game/booking-access-requests")
+def list_booking_access_requests(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    hosted_game_ids = db.query(Game.id).filter(Game.host_id == current_user.id).all()
+    game_ids = [g[0] for g in hosted_game_ids]
+    
+    requests = db.query(BookingAccessRequest).filter(
+        BookingAccessRequest.game_id.in_(game_ids),
+        BookingAccessRequest.status == "pending"
+    ).all()
+    
+    return [
+        {
+            "id": r.id,
+            "game_id": r.game_id,
+            "game_name": r.game.name,
+            "user_id": r.user_id,
+            "username": r.user.username,
+            "profile_pic": r.user.profile_pic,
+            "created_at": r.created_at
+        }
+        for r in requests
+    ]
+
+
+@router.post("/game/booking-access-request/{request_id}/approve")
+def approve_booking_access(
+    request_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    req = db.query(BookingAccessRequest).filter(BookingAccessRequest.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+        
+    if req.game.host_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the game host can approve booking access requests")
+        
+    req.status = "approved"
+    
+    NotificationService.create_notification(
+        user_id=req.user_id,
+        title="Booking Access Approved",
+        message=f"Your request to book a venue for game '{req.game.name}' has been approved by the host.",
+        notif_type="game_accepted",
+        db=db
+    )
+    db.commit()
+    return {"message": "Request approved successfully"}
+
+
+@router.post("/game/booking-access-request/{request_id}/reject")
+def reject_booking_access(
+    request_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    req = db.query(BookingAccessRequest).filter(BookingAccessRequest.id == request_id).first()
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+        
+    if req.game.host_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the game host can reject booking access requests")
+        
+    req.status = "rejected"
+    
+    NotificationService.create_notification(
+        user_id=req.user_id,
+        title="Booking Access Rejected",
+        message=f"Your request to book a venue for game '{req.game.name}' was rejected by the host.",
+        notif_type="system",
+        db=db
+    )
+    db.commit()
+    return {"message": "Request rejected successfully"}
