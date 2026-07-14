@@ -80,14 +80,26 @@ def get_available_slots(id: int, booking_date: date, db: Session = Depends(get_d
         Booking.status == "confirmed"
     ).all()
     
-    # Simple list of all hourly slots (6:00 to 22:00)
+    # List of slots of 1-hour duration starting every 30 minutes (6:00 to 22:00)
     all_slots = []
     start_hour = 6
     end_hour = 22
     
-    for hr in range(start_hour, end_hour):
-        slot_start = time(hr, 0)
-        slot_end = time(hr + 1, 0)
+    # 6:00 is step 0, 21:00 is the last start time.
+    # Total 30-minute intervals: (22 - 1 - 6) * 2 + 1 = 31 slots
+    total_slots = (end_hour - 1 - start_hour) * 2 + 1
+    
+    for i in range(total_slots):
+        start_minutes = start_hour * 60 + i * 30
+        sh = start_minutes // 60
+        sm = start_minutes % 60
+        
+        end_minutes = start_minutes + 60
+        eh = end_minutes // 60
+        em = end_minutes % 60
+        
+        slot_start = time(sh, sm)
+        slot_end = time(eh, em)
         
         # Check if slot is booked
         is_booked = False
@@ -162,7 +174,8 @@ def book_venue(
         start_time=booking_in.start_time,
         end_time=booking_in.end_time,
         amount_paid=booking_in.amount_paid,
-        status="confirmed"
+        status="confirmed",
+        game_id=booking_in.game_id
     )
     db.add(db_booking)
     db.commit()
@@ -191,6 +204,73 @@ def get_booking_history(
         .order_by(Booking.id.desc())
         .all()
     )
+
+
+@router.post("/cancel-booking/{booking_id}")
+def cancel_booking(
+    booking_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    booking = db.query(Booking).filter(Booking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Booking not found"
+        )
+        
+    if booking.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to cancel this booking"
+        )
+        
+    if booking.status == "cancelled":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Booking is already cancelled"
+        )
+
+    # Calculate time difference
+    booked_datetime = datetime.combine(booking.booking_date, booking.start_time)
+    if booked_datetime - datetime.now() < timedelta(hours=24):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Bookings can only be cancelled at least 24 hours before the booked slot timing"
+        )
+        
+    # Cancel booking
+    booking.status = "cancelled"
+    
+    # Refund wallet balance
+    wallet = db.query(Wallet).filter(Wallet.user_id == current_user.id).first()
+    if wallet:
+        wallet.balance += booking.amount_paid
+    else:
+        # Create wallet if missing
+        wallet = Wallet(user_id=current_user.id, balance=booking.amount_paid)
+        db.add(wallet)
+        
+    # Log credit payment history
+    history = PaymentHistory(
+        user_id=current_user.id,
+        amount=booking.amount_paid,
+        type="credit",
+        description=f"Refund: Cancelled booking on {booking.booking_date}"
+    )
+    db.add(history)
+    
+    # Create notification
+    NotificationService.create_notification(
+        user_id=current_user.id,
+        title="Booking Cancelled",
+        message=f"Your booking on {booking.booking_date} has been cancelled. Rs. {booking.amount_paid} refunded to your wallet.",
+        notif_type="system",
+        db=db
+    )
+    
+    db.commit()
+    return {"status": "success", "message": "Booking cancelled and refunded successfully."}
 
 
 # --- Wallet APIs ---

@@ -155,9 +155,11 @@ class Booking(Base):
     amount_paid = Column(DECIMAL(10, 2), nullable=False)
     status = Column(String(20), default="confirmed")  # confirmed, cancelled
     created_at = Column(DateTime, default=datetime.utcnow)
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="SET NULL"), nullable=True)
 
     venue = relationship("Venue", back_populates="bookings")
     user = relationship("User", back_populates="bookings")
+    game = relationship("Game")
 
 
 class ChatRoom(Base):
@@ -250,3 +252,16 @@ class Settings(Base):
     dark_mode = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="settings")
+
+
+class BookingAccessRequest(Base):
+    __tablename__ = "booking_access_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(20), default="pending")  # pending, approved, rejected
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    game = relationship("Game")
+    user = relationship("User")
