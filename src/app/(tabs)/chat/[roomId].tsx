@@ -1,4 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
+import * as ImagePicker from "expo-image-picker";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from "react-native-reanimated";
+import {
+  GestureDetector,
+  Gesture,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import { 
   View, 
   Text, 
@@ -13,7 +24,9 @@ import {
   Modal,
   Alert,
   ScrollView,
-  SafeAreaView
+  SafeAreaView,
+  Keyboard,
+  StatusBar
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
@@ -66,11 +79,65 @@ export default function ChatRoomScreen() {
   // Payment Form
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentTitle, setPaymentTitle] = useState("");
+  const [roomDetail, setRoomDetail] = useState<any>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [showImageSourceModal, setShowImageSourceModal] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [viewerImageUrl, setViewerImageUrl] = useState<string | null>(null);
+  const [previewAsset, setPreviewAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
+
+  const openViewer = (url: string) => setViewerImageUrl(url);
+  const closeViewer = () => setViewerImageUrl(null);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  const isChatBlocked = () => {
+    if (!roomDetail || roomDetail.type !== "game") return false;
+    if (!roomDetail.game_date || !roomDetail.start_time) return false;
+    
+    try {
+      const now = new Date();
+      const [yr, mo, dy] = roomDetail.game_date.split("-").map(Number);
+      const [hr, min, sec] = roomDetail.start_time.split(":").map(Number);
+      const gameStart = new Date(yr, mo - 1, dy, hr, min, sec || 0);
+      if (isNaN(gameStart.getTime())) return false;
+      const blockTime = new Date(gameStart.getTime() + 10 * 60 * 1000);
+      return now > blockTime;
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const getCleanedGroupName = () => {
+    if (!roomDetail?.name) return `Chat Room #${parsedRoomId}`;
+    if (roomDetail.name.startsWith("Game: ")) {
+      return roomDetail.name.substring(6);
+    }
+    return roomDetail.name;
+  };
 
   // Load chat profile and messages
   const loadChatData = async () => {
     setLoading(true);
     try {
+      try {
+        const roomRes = await api.get(`/chat/room/${parsedRoomId}`);
+        setRoomDetail(roomRes.data);
+      } catch (err) {
+        console.log("Error loading room detail metadata:", err);
+      }
       const response = await api.get(`/messages?room_id=${parsedRoomId}`);
       // Parse JSON fields
       const formatted = response.data.map((m: any) => ({
@@ -104,6 +171,10 @@ export default function ChatRoomScreen() {
   }, [roomId]);
 
   const sendMessage = async (payload: any) => {
+    if (isChatBlocked()) {
+      Alert.alert("Chat Archived", "You cannot send messages to this room anymore.");
+      return;
+    }
     try {
       const response = await api.post(`/chat?room_id=${parsedRoomId}`, payload);
       // Clean input
@@ -209,23 +280,67 @@ export default function ChatRoomScreen() {
   };
 
   const handleShareImage = () => {
-    Alert.alert(
-      "Share Image",
-      "Simulate uploading a sports court mockup image?",
-      [
-        { text: "Cancel" },
-        {
-          text: "Upload Mockup",
-          onPress: () => {
-            sendMessage({
-              type: "image",
-              image_url: "https://images.unsplash.com/photo-1544698310-74ea9d1c8258?q=80&w=600"
-            });
-            setShowAttachmentMenu(false);
-          }
+    setShowAttachmentMenu(false);
+    setShowImageSourceModal(true);
+  };
+
+  const pickFromSource = async (useCamera: boolean) => {
+    setShowImageSourceModal(false);
+    try {
+      // Request permissions
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "Camera access is required to take a photo.");
+          return;
         }
-      ]
-    );
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert("Permission Denied", "Gallery access is required to select a photo.");
+          return;
+        }
+      }
+
+      const result = useCamera
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+
+      if (!result.canceled && result.assets.length > 0) {
+        // Show custom preview instead of uploading immediately
+        setPreviewAsset(result.assets[0]);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Something went wrong when opening the picker.");
+    }
+  };
+
+  const handleSendPreviewImage = async () => {
+    if (!previewAsset) return;
+    const asset = previewAsset;
+    setPreviewAsset(null);
+    setImageUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", {
+        uri: asset.uri,
+        name: asset.fileName || `photo_${Date.now()}.jpg`,
+        type: asset.mimeType || "image/jpeg",
+      } as any);
+
+      const uploadRes = await api.post("/chat/upload-image", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      sendMessage({
+        type: "image",
+        image_url: uploadRes.data.url,
+      });
+    } catch (err: any) {
+      Alert.alert("Upload Failed", err.response?.data?.detail || "Could not upload image.");
+    } finally {
+      setImageUploading(false);
+    }
   };
 
   // Group Details / Roster
@@ -265,7 +380,7 @@ export default function ChatRoomScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { backgroundColor: COLORS.surface }]}>
       {/* Header bar */}
       <View style={styles.chatHeader}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -273,7 +388,9 @@ export default function ChatRoomScreen() {
         </TouchableOpacity>
         
         <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle} numberOfLines={1}>Chat Room #{parsedRoomId}</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {getCleanedGroupName()}
+          </Text>
           <Text style={styles.headerSub}>
             {typingUsers.length > 0 
               ? `${typingUsers.map(u => u.username).join(", ")} typing...`
@@ -305,9 +422,9 @@ export default function ChatRoomScreen() {
       </View>
 
       <KeyboardAvoidingView 
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "padding" : "padding"}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : (keyboardHeight > 0 ? -60 : 0)}
       >
         {/* Messages list */}
         {loading && messages.length === 0 ? (
@@ -320,13 +437,18 @@ export default function ChatRoomScreen() {
             data={messages}
             keyExtractor={(item) => item.id.toString()}
             contentContainerStyle={styles.messageScroll}
+            keyboardShouldPersistTaps="handled"
             onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
             renderItem={({ item }) => {
               const isOwn = item.sender_id === auth.user?.id;
               
               return (
-                <View style={[styles.bubbleWrapper, isOwn ? styles.bubbleOwnWrapper : styles.bubbleOtherWrapper]}>
+                <View style={[
+                  styles.bubbleWrapper, 
+                  isOwn ? styles.bubbleOwnWrapper : styles.bubbleOtherWrapper,
+                  item.type === "image" ? { maxWidth: "88%" } : null
+                ]}>
                   {/* Sender metadata */}
                   {!isOwn && (
                     <TouchableOpacity onPress={() => router.push({ pathname: "/user-profile", params: { userId: item.sender_id } })}>
@@ -338,7 +460,8 @@ export default function ChatRoomScreen() {
                   <View style={[
                     styles.bubble, 
                     isOwn ? styles.bubbleOwn : styles.bubbleOther,
-                    item.type === "poll" || item.type === "payment" ? styles.specialBubble : null
+                    item.type === "poll" || item.type === "payment" ? styles.specialBubble : null,
+                    item.type === "image" ? { padding: 4 } : null
                   ]}>
                     
                     {/* Media Type Handler */}
@@ -347,10 +470,19 @@ export default function ChatRoomScreen() {
                     )}
 
                     {item.type === "image" && (
-                      <View>
-                        <Image source={{ uri: item.image_url }} style={styles.bubbleImg} />
-                        {item.content && <Text style={[styles.msgText, isOwn ? styles.msgOwnText : null, { marginTop: 6 }]}>{item.content}</Text>}
-                      </View>
+                      <TouchableOpacity 
+                        activeOpacity={0.9}
+                        onPress={() => openViewer(item.image_url)}
+                      >
+                        <View style={styles.imageBubbleWrapper}>
+                          <Image 
+                            source={{ uri: item.image_url }} 
+                            style={styles.bubbleImg} 
+                            resizeMode="contain"
+                          />
+                          {item.content && <Text style={[styles.msgText, isOwn ? styles.msgOwnText : null, { marginTop: 6 }]}>{item.content}</Text>}
+                        </View>
+                      </TouchableOpacity>
                     )}
 
                     {item.type === "poll" && (
@@ -362,17 +494,39 @@ export default function ChatRoomScreen() {
                             const totalVotes = (Object.values(item.poll_votes || {}) as number[][]).reduce((acc: number, curr: number[]) => acc + curr.length, 0);
                             const hasVoted = votesArray.includes(auth.user?.id || 0);
                             const percentage = totalVotes > 0 ? (votesArray.length / totalVotes) * 100 : 0;
+                            
+                            // Find option with maximum votes
+                            const pollVotesObj = item.poll_votes || {};
+                            const maxVotes = Math.max(
+                              ...Object.values(pollVotesObj).map((arr: any) => (arr || []).length),
+                              0
+                            );
+                            const isWinner = maxVotes > 0 && votesArray.length === maxVotes;
 
                             return (
                               <TouchableOpacity 
                                 key={idx} 
-                                style={[styles.pollOptionBtn, hasVoted ? styles.pollOptionVoted : null]}
+                                style={[
+                                  styles.pollOptionBtn, 
+                                  hasVoted ? styles.pollOptionVoted : null,
+                                  isWinner ? styles.pollOptionWinner : null
+                                ]}
                                 onPress={() => handleVote(item.id, idx)}
                               >
-                                <View style={[styles.pollVoteProgress, { width: `${percentage}%` }]} />
+                                <View 
+                                  style={[
+                                    styles.pollVoteProgress, 
+                                    { 
+                                      width: `${percentage}%`,
+                                      backgroundColor: isWinner ? "rgba(76, 175, 80, 0.28)" : "rgba(33, 150, 243, 0.15)"
+                                    }
+                                  ]} 
+                                />
                                 <View style={styles.pollOptionLabelRow}>
                                   <Text style={styles.pollOptionLabel}>{option}</Text>
-                                  <Text style={styles.pollOptionCount}>{votesArray.length} votes</Text>
+                                  <Text style={[styles.pollOptionCount, isWinner ? styles.pollOptionCountWinner : null]}>
+                                    {votesArray.length} votes
+                                  </Text>
                                 </View>
                               </TouchableOpacity>
                             );
@@ -459,35 +613,42 @@ export default function ChatRoomScreen() {
           </View>
         )}
 
-        {/* Input Bar */}
-        <View style={styles.inputBar}>
-          <TouchableOpacity 
-            style={styles.attachmentBtn} 
-            onPress={() => setShowAttachmentMenu(!showAttachmentMenu)}
-          >
-            <Ionicons 
-              name={showAttachmentMenu ? "close-circle" : "add-circle"} 
-              size={28} 
-              color={COLORS.primary} 
+        {/* Input Bar or Blocked Banner */}
+        {isChatBlocked() ? (
+          <View style={styles.blockedBar}>
+            <Ionicons name="lock-closed" size={20} color={COLORS.textSecondary} style={{ marginRight: 8 }} />
+            <Text style={styles.blockedText}>Chatting is closed as this game started more than 10 minutes ago.</Text>
+          </View>
+        ) : (
+          <View style={styles.inputBar}>
+            <TouchableOpacity 
+              style={styles.attachmentBtn} 
+              onPress={() => setShowAttachmentMenu(!showAttachmentMenu)}
+            >
+              <Ionicons 
+                name={showAttachmentMenu ? "close-circle" : "add-circle"} 
+                size={28} 
+                color={COLORS.primary} 
+              />
+            </TouchableOpacity>
+            
+            <TextInput
+              style={styles.chatInput}
+              placeholder="Type message here..."
+              placeholderTextColor={COLORS.textSecondary}
+              value={inputMessage}
+              onChangeText={(text) => {
+                setInputMessage(text);
+                if (text.length > 0 && !typing) handleTypingStatus(true);
+                if (text.length === 0 && typing) handleTypingStatus(false);
+              }}
             />
-          </TouchableOpacity>
-          
-          <TextInput
-            style={styles.chatInput}
-            placeholder="Type message here..."
-            placeholderTextColor={COLORS.textSecondary}
-            value={inputMessage}
-            onChangeText={(text) => {
-              setInputMessage(text);
-              if (text.length > 0 && !typing) handleTypingStatus(true);
-              if (text.length === 0 && typing) handleTypingStatus(false);
-            }}
-          />
 
-          <TouchableOpacity style={styles.sendBtn} onPress={handleSendText}>
-            <Ionicons name="send" size={20} color={COLORS.surface} />
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity style={styles.sendBtn} onPress={handleSendText}>
+              <Ionicons name="send" size={20} color={COLORS.surface} />
+            </TouchableOpacity>
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       {/* POLL CREATION MODAL */}
@@ -603,22 +764,232 @@ export default function ChatRoomScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+
+      {/* ===== IMAGE SOURCE PICKER MODAL ===== */}
+      <Modal visible={showImageSourceModal} transparent animationType="fade" onRequestClose={() => setShowImageSourceModal(false)}>
+        <View style={styles.imgPickerOverlay}>
+          <View style={styles.imgPickerCard}>
+            {/* Icon header */}
+            <View style={styles.imgPickerIconRow}>
+              <View style={styles.imgPickerIconCircle}>
+                <Ionicons name="images" size={32} color={COLORS.primary} />
+              </View>
+            </View>
+            <Text style={styles.imgPickerTitle}>Share a Photo</Text>
+            <Text style={styles.imgPickerSubtitle}>Choose where to pick your image from</Text>
+
+            {/* Gallery button */}
+            <TouchableOpacity style={styles.imgPickerBtn} onPress={() => pickFromSource(false)}>
+              <View style={styles.imgPickerBtnIcon}>
+                <Ionicons name="image-outline" size={22} color={COLORS.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.imgPickerBtnLabel}>Gallery</Text>
+                <Text style={styles.imgPickerBtnSub}>Pick from your photo library</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Camera button */}
+            <TouchableOpacity style={styles.imgPickerBtn} onPress={() => pickFromSource(true)}>
+              <View style={[styles.imgPickerBtnIcon, { backgroundColor: "#FFF3E0" }]}>
+                <Ionicons name="camera-outline" size={22} color="#F57C00" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.imgPickerBtnLabel}>Camera</Text>
+                <Text style={styles.imgPickerBtnSub}>Take a new photo right now</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Cancel */}
+            <TouchableOpacity style={styles.imgPickerCancelBtn} onPress={() => setShowImageSourceModal(false)}>
+              <Text style={styles.imgPickerCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Uploading overlay */}
+      {imageUploading && (
+        <View style={styles.uploadingOverlay}>
+          <View style={styles.uploadingCard}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.uploadingText}>Uploading image…</Text>
+          </View>
+        </View>
+      )}
+
+      {/* ===== CUSTOM IMAGE PREVIEW (replaces native crop screen) ===== */}
+      <Modal
+        visible={!!previewAsset}
+        transparent={false}
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setPreviewAsset(null)}
+      >
+        <View style={styles.previewContainer}>
+          {/* Header bar */}
+          <View style={styles.previewHeader}>
+            <TouchableOpacity
+              style={styles.previewBackBtn}
+              onPress={() => setPreviewAsset(null)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.previewHeaderTitle}>Preview</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          {/* Full image preview */}
+          <View style={styles.previewImageContainer}>
+            {previewAsset && (
+              <Image
+                source={{ uri: previewAsset.uri }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+
+          {/* Bottom action bar */}
+          <View style={styles.previewBottomBar}>
+            <TouchableOpacity
+              style={styles.previewCancelBtn}
+              onPress={() => setPreviewAsset(null)}
+            >
+              <Text style={styles.previewCancelText}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.previewSendBtn}
+              onPress={handleSendPreviewImage}
+            >
+              <Ionicons name="send" size={18} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.previewSendText}>Send</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ===== FULLSCREEN IMAGE VIEWER ===== */}
+      {viewerImageUrl && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={closeViewer}
+        >
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <View style={styles.viewerBg}>
+              {/* Close button */}
+              <TouchableOpacity style={styles.viewerCloseBtn} onPress={closeViewer}>
+                <Ionicons name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+
+              {/* Pinch + Pan + Double-tap image */}
+              <ViewerImage imageUrl={viewerImageUrl} />
+            </View>
+          </GestureHandlerRootView>
+        </Modal>
+      )}
+    </View>
   );
 }
+
+// ── Full-screen image viewer with pinch, pan & double-tap ─────────────
+function ViewerImage({ imageUrl }: { imageUrl: string }) {
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const transX = useSharedValue(0);
+  const transY = useSharedValue(0);
+  const savedTransX = useSharedValue(0);
+  const savedTransY = useSharedValue(0);
+
+  // Pinch to zoom (min 1x, max 6x)
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      scale.value = Math.max(1, Math.min(savedScale.value * e.scale, 6));
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+    });
+
+  // Pan to move when zoomed in
+  const panGesture = Gesture.Pan()
+    .averageTouches(true)
+    .onUpdate((e) => {
+      if (savedScale.value > 1) {
+        transX.value = savedTransX.value + e.translationX;
+        transY.value = savedTransY.value + e.translationY;
+      }
+    })
+    .onEnd(() => {
+      savedTransX.value = transX.value;
+      savedTransY.value = transY.value;
+    });
+
+  // Double-tap: toggle zoom 1x <-> 2.5x
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDuration(250)
+    .onEnd(() => {
+      if (scale.value > 1) {
+        // Reset to fit
+        scale.value = withSpring(1, { damping: 15 });
+        savedScale.value = 1;
+        transX.value = withSpring(0, { damping: 15 });
+        transY.value = withSpring(0, { damping: 15 });
+        savedTransX.value = 0;
+        savedTransY.value = 0;
+      } else {
+        scale.value = withSpring(2.5, { damping: 15 });
+        savedScale.value = 2.5;
+      }
+    });
+
+  // Exclusive: double-tap is tried first; if it doesn't match, pinch+pan run
+  const composed = Gesture.Exclusive(
+    doubleTap,
+    Gesture.Simultaneous(pinchGesture, panGesture)
+  );
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: transX.value },
+      { translateY: transY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  return (
+    <GestureDetector gesture={composed}>
+      <Animated.View style={StyleSheet.absoluteFillObject}>
+        <Animated.Image
+          source={{ uri: imageUrl }}
+          style={[StyleSheet.absoluteFillObject, animStyle]}
+          resizeMode="contain"
+        />
+      </Animated.View>
+    </GestureDetector>
+  );
+}
+
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.surface,
   },
   chatHeader: {
     flexDirection: "row",
-    height: Platform.OS === "ios" ? 90 : 64,
+    height: Platform.OS === "ios" ? 90 : (StatusBar.currentHeight || 24) + 54,
     backgroundColor: COLORS.surface,
     borderBottomWidth: 1.5,
     borderBottomColor: COLORS.border,
-    paddingTop: Platform.OS === "ios" ? 44 : 10,
+    paddingTop: Platform.OS === "ios" ? 44 : (StatusBar.currentHeight || 24) + 10,
     alignItems: "center",
     paddingHorizontal: SPACING.md,
     justifyContent: "space-between",
@@ -690,6 +1061,13 @@ const styles = StyleSheet.create({
   bubbleOtherWrapper: {
     alignSelf: "flex-start",
   },
+  imageBubbleWrapper: {
+    // Give images more room to breathe
+    width: 240,
+    minWidth: 200,
+    overflow: "hidden",
+    borderRadius: 12,
+  },
   senderName: {
     fontFamily: "Poppins_500Medium",
     fontSize: 11,
@@ -741,9 +1119,9 @@ const styles = StyleSheet.create({
   },
   bubbleImg: {
     width: "100%",
-    height: 140,
+    aspectRatio: 4 / 3,
     borderRadius: 12,
-    resizeMode: "cover",
+    backgroundColor: "#000",
   },
   pollCard: {
     padding: 4,
@@ -770,6 +1148,10 @@ const styles = StyleSheet.create({
   pollOptionVoted: {
     borderColor: COLORS.primary,
   },
+  pollOptionWinner: {
+    borderColor: "#4CAF50",
+    borderWidth: 1.5,
+  },
   pollVoteProgress: {
     position: "absolute",
     top: 0,
@@ -792,6 +1174,10 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_400Regular",
     fontSize: 11,
     color: COLORS.textSecondary,
+  },
+  pollOptionCountWinner: {
+    color: "#2E7D32",
+    fontFamily: "Poppins_600SemiBold",
   },
   paymentCard: {
     padding: 4,
@@ -867,7 +1253,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACING.md,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderTopWidth: 1.5,
     borderTopColor: COLORS.border,
     alignItems: "center",
@@ -878,20 +1264,23 @@ const styles = StyleSheet.create({
   chatInput: {
     flex: 1,
     backgroundColor: COLORS.background,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    height: 40,
+    borderRadius: 23,
+    paddingLeft: 16,
+    paddingRight: 16,
+    paddingVertical: 0,
+    height: 46,
     fontFamily: "Poppins_400Regular",
     fontSize: 14,
     color: COLORS.textPrimary,
     marginHorizontal: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
+    textAlignVertical: "center",
   },
   sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: COLORS.primary,
     justifyContent: "center",
     alignItems: "center",
@@ -1022,5 +1411,208 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     color: COLORS.surface,
     fontSize: 14,
+  },
+  blockedBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F5F5F5",
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+  },
+  blockedText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+
+  // ── Image Picker Modal ──────────────────────────────────
+  imgPickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    paddingBottom: 24,
+  },
+  imgPickerCard: {
+    width: "92%",
+    backgroundColor: COLORS.surface,
+    borderRadius: 28,
+    padding: 24,
+    alignItems: "stretch",
+    ...SHADOWS.medium,
+  },
+  imgPickerIconRow: {
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  imgPickerIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: COLORS.primary + "15",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imgPickerTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 20,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  imgPickerSubtitle: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    marginBottom: 22,
+  },
+  imgPickerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 14,
+  },
+  imgPickerBtnIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.primary + "12",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imgPickerBtnLabel: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+  imgPickerBtnSub: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 1,
+  },
+  imgPickerCancelBtn: {
+    marginTop: 6,
+    paddingVertical: 13,
+    borderRadius: 14,
+    backgroundColor: "#F5F5F5",
+    alignItems: "center",
+  },
+  imgPickerCancelText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+
+  // ── Uploading Overlay ───────────────────────────────────
+  uploadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 999,
+  },
+  uploadingCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 20,
+    padding: 28,
+    alignItems: "center",
+    gap: 14,
+    ...SHADOWS.medium,
+  },
+  uploadingText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+
+  // ── Custom Image Preview ──────────────────────────────────
+  previewContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  previewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: (StatusBar.currentHeight || 24) + 12,
+    paddingHorizontal: 16,
+    height: 80,
+  },
+  previewBackBtn: {
+    padding: 4,
+  },
+  previewHeaderTitle: {
+    color: "#fff",
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 18,
+  },
+  previewImageContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+  },
+  previewBottomBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 24,
+    paddingBottom: 36,
+    paddingTop: 16,
+    backgroundColor: "rgba(0,0,0,0.2)",
+  },
+  previewCancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  previewCancelText: {
+    color: "#fff",
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+  },
+  previewSendBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    justifyContent: "center",
+  },
+  previewSendText: {
+    color: "#fff",
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+  },
+
+  // ── Fullscreen Image Viewer ──────────────────────────────
+  viewerBg: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  viewerCloseBtn: {
+    position: "absolute",
+    top: (StatusBar.currentHeight || 24) + 12,
+    right: 18,
+    zIndex: 10,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderRadius: 24,
+    padding: 8,
   },
 });

@@ -16,6 +16,7 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
         tabBarStyle: {
@@ -97,6 +98,8 @@ export default function TabsLayout() {
         name="chat/[roomId]"
         options={{
           href: null,
+          tabBarStyle: { display: "none" },
+          headerShown: false,
         }}
       />
       <Tabs.Screen

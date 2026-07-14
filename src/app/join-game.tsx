@@ -26,6 +26,17 @@ export default function JoinGameScreen() {
 
   const auth = useSelector((state: RootState) => state.auth);
   const { games } = useSelector((state: RootState) => state.game);
+  
+  const now = new Date();
+  const activeGames = (games || []).filter((g: any) => {
+    try {
+      if (!g.game_date || !g.start_time) return false;
+      const gameStart = new Date(`${g.game_date}T${g.start_time}`);
+      return gameStart.getTime() > now.getTime();
+    } catch (e) {
+      return false;
+    }
+  });
 
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [loading, setLoading] = useState(false);
@@ -122,7 +133,7 @@ export default function JoinGameScreen() {
             showsUserLocation
             showsMyLocationButton
           >
-            {games.map((g) => {
+            {activeGames.map((g) => {
               if (!g.latitude || !g.longitude) return null;
               return (
                 <Marker
@@ -153,7 +164,7 @@ export default function JoinGameScreen() {
           <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>
         ) : (
           <FlatList
-            data={games}
+            data={activeGames}
             keyExtractor={(item) => item.id.toString()}
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}

@@ -97,7 +97,7 @@ export default function OTPScreen() {
             text: "Continue",
             onPress: () => {
               if (role === "owner" || profileData.user.role === "owner") {
-                router.replace("/owner/dashboard");
+                router.replace("/owner/dashboard" as any);
               } else if (hasDetails) {
                 router.replace("/(tabs)/home");
               } else {

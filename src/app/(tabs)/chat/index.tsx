@@ -1,16 +1,19 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
-import {
+import React, { useState, useEffect, useCallback } from "react";
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  FlatList, 
+  TouchableOpacity, 
+  Image, 
   ActivityIndicator,
-  FlatList,
-  StyleSheet,
-  Text,
   TextInput,
-  TouchableOpacity,
-  View
+  Alert
 } from "react-native";
-import { useDispatch, useSelector } from "react-redux";
+import Swipeable from "react-native-gesture-handler/Swipeable";
+import { useRouter, useFocusEffect } from "expo-router";
+import { useSelector, useDispatch } from "react-redux";
+import { Ionicons } from "@expo/vector-icons";
 import { setRooms } from "../../../redux/chatSlice";
 import { RootState } from "../../../redux/store";
 import api from "../../../services/api";
@@ -35,9 +38,10 @@ export default function ChatListScreen() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadRooms = async () => {
-    setLoading(true);
+  const loadRooms = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
     try {
       const response = await api.get("/chat");
       const roomsData = response.data;
@@ -51,12 +55,70 @@ export default function ChatListScreen() {
       console.log("Error fetching chat rooms:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    loadRooms();
+  useFocusEffect(
+    useCallback(() => {
+      loadRooms(false);
+    }, [])
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadRooms(true);
   }, []);
+
+  const handleDeleteRoom = async (roomId: number) => {
+    Alert.alert(
+      "Delete Chat",
+      "Are you sure you want to delete this chat? This will remove you from the game/squad.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete", 
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.delete(`/chat/exit/${roomId}`);
+              dispatch(setRooms(rooms.filter((r: any) => r.id !== roomId)));
+            } catch (err) {
+              Alert.alert("Error", "Could not delete/exit chat room.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const renderRightActions = (roomId: number) => {
+    return (
+      <TouchableOpacity
+        style={styles.deleteAction}
+        onPress={() => handleDeleteRoom(roomId)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="trash-outline" size={22} color={COLORS.surface} />
+      </TouchableOpacity>
+    );
+  };
+
+  const isGameExpired = (room: any) => {
+    if (room.type !== "game") return false;
+    if (!room.game_date || !room.start_time) return false;
+    try {
+      const now = new Date();
+      const [yr, mo, dy] = room.game_date.split("-").map(Number);
+      const [hr, min, sec] = room.start_time.split(":").map(Number);
+      const gameStart = new Date(yr, mo - 1, dy, hr, min, sec || 0);
+      if (isNaN(gameStart.getTime())) return false;
+      const blockTime = new Date(gameStart.getTime() + 10 * 60 * 1000);
+      return now > blockTime;
+    } catch (e) {
+      return false;
+    }
+  };
 
   const getRoomIcon = (type: string) => {
     switch (type) {
@@ -97,6 +159,8 @@ export default function ChatListScreen() {
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="chatbubbles-outline" size={48} color={COLORS.cardBackground} />
@@ -108,33 +172,38 @@ export default function ChatListScreen() {
             const lastMsg = item.last_message;
             const displayName = item.name || `Group Chat`;
             return (
-              <TouchableOpacity
-                style={styles.roomItem}
-                onPress={() => router.push(`/(tabs)/chat/${item.id}`)}
+              <Swipeable
+                renderRightActions={() => renderRightActions(item.id)}
+                containerStyle={styles.swipeableContainer}
               >
-                <View style={styles.avatarWrapper}>
-                  <View style={styles.iconAvatar}>
-                    <Ionicons name={getRoomIcon(item.type) as any} size={24} color={COLORS.primary} />
+                <TouchableOpacity
+                  style={[styles.roomItem, isGameExpired(item) && styles.roomItemExpired]}
+                  onPress={() => router.push(`/(tabs)/chat/${item.id}`)}
+                >
+                  <View style={styles.avatarWrapper}>
+                    <View style={styles.iconAvatar}>
+                      <Ionicons name={getRoomIcon(item.type) as any} size={24} color={COLORS.primary} />
+                    </View>
+                    <View style={[styles.typeBadge, { backgroundColor: item.type === "game" ? COLORS.primary : COLORS.success }]} />
                   </View>
-                  <View style={[styles.typeBadge, { backgroundColor: item.type === "game" ? COLORS.primary : COLORS.success }]} />
-                </View>
 
-                <View style={styles.roomInfo}>
-                  <View style={styles.roomHeader}>
-                    <Text style={styles.roomName} numberOfLines={1}>{displayName}</Text>
-                    {lastMsg && (
-                      <Text style={styles.timeText}>
-                        {parseUTCDate(lastMsg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </Text>
-                    )}
+                  <View style={styles.roomInfo}>
+                    <View style={styles.roomHeader}>
+                      <Text style={styles.roomName} numberOfLines={1}>{displayName}</Text>
+                      {lastMsg && (
+                        <Text style={styles.timeText}>
+                          {parseUTCDate(lastMsg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={styles.lastMsgText} numberOfLines={1}>
+                      {lastMsg 
+                        ? `${lastMsg.sender_username}: ${lastMsg.content || "[Image/Attachment]"}`
+                        : "No messages yet. Send a greeting!"}
+                    </Text>
                   </View>
-                  <Text style={styles.lastMsgText} numberOfLines={1}>
-                    {lastMsg
-                      ? `${lastMsg.sender_username}: ${lastMsg.content || "[Image/Attachment]"}`
-                      : "No messages yet. Send a greeting!"}
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </Swipeable>
             );
           }}
         />
@@ -187,9 +256,26 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 20,
     padding: SPACING.md,
-    marginBottom: SPACING.md,
     alignItems: "center",
     ...SHADOWS.soft,
+  },
+  swipeableContainer: {
+    marginBottom: SPACING.md,
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  deleteAction: {
+    backgroundColor: "#FF3B30",
+    justifyContent: "center",
+    alignItems: "center",
+    width: 70,
+    height: "100%",
+    borderRadius: 20,
+  },
+  roomItemExpired: {
+    opacity: 0.55,
+    backgroundColor: "#F5F5F5",
+    borderColor: "#EAEAEA",
   },
   avatarWrapper: {
     position: "relative",
