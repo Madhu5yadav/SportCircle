@@ -14,11 +14,11 @@ import Swipeable from "react-native-gesture-handler/Swipeable";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS, SPACING, SHADOWS } from "../../../theme/theme";
+import { setRooms } from "../../../redux/chatSlice";
 import { RootState } from "../../../redux/store";
 import api from "../../../services/api";
-import { setRooms } from "../../../redux/chatSlice";
 import { SocketService } from "../../../services/socket";
+import { COLORS, SHADOWS, SPACING } from "../../../theme/theme";
 
 const parseUTCDate = (dateStr: string): Date => {
   if (!dateStr) return new Date();
@@ -32,7 +32,7 @@ const parseUTCDate = (dateStr: string): Date => {
 export default function ChatListScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
-  
+
   const auth = useSelector((state: RootState) => state.auth);
   const { rooms } = useSelector((state: RootState) => state.chat);
 
@@ -46,7 +46,7 @@ export default function ChatListScreen() {
       const response = await api.get("/chat");
       const roomsData = response.data;
       dispatch(setRooms(roomsData));
-      
+
       // Auto-join socket rooms for real-time notifications
       roomsData.forEach((room: any) => {
         SocketService.joinChat(room.id);

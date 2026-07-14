@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from "../theme/theme";
 import api from "../services/api";
@@ -29,6 +30,7 @@ interface UserSearchResult {
 }
 
 export default function SearchUsersScreen() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<UserSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -99,7 +101,10 @@ export default function SearchUsersScreen() {
     
     return (
       <View style={styles.userCard}>
-        <View style={styles.userInfo}>
+        <TouchableOpacity 
+          style={styles.userInfo}
+          onPress={() => router.push({ pathname: "/user-profile", params: { userId: item.id } })}
+        >
           <Image
             source={{ uri: item.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150" }}
             style={styles.avatar}
@@ -109,7 +114,7 @@ export default function SearchUsersScreen() {
             {fullName ? <Text style={styles.fullName}>{fullName}</Text> : null}
             <Text style={styles.mutualCount}>{item.mutual_friends_count} mutual friends</Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Action Button */}
         {item.friendship_status === "none" && (

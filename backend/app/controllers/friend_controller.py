@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from typing import List, Optional
+from datetime import datetime
 
 from app.database.db import get_db
 from app.models.models import User, Friend, Favorite
@@ -110,9 +111,32 @@ def action_friend_request(
 
 @router.get("/friends", response_model=List[FriendResponse])
 def list_friends(
+    suggestions: Optional[bool] = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    if suggestions:
+        # Find users who don't have any friendship relation with current_user
+        related_user_ids = db.query(Friend.user_id).filter(Friend.friend_id == current_user.id).union(
+            db.query(Friend.friend_id).filter(Friend.user_id == current_user.id)
+        ).all()
+        related_set = {r[0] for r in related_user_ids}
+        related_set.add(current_user.id)
+        
+        suggested_users = db.query(User).filter(User.id.notin_(related_set)).limit(10).all()
+        
+        suggestions_list = []
+        for u in suggested_users:
+            suggestions_list.append(FriendResponse(
+                friendship_id=0,
+                friend_id=u.id,
+                username=u.username,
+                mobile=u.mobile,
+                profile_pic=u.profile_pic,
+                status="none",
+                created_at=datetime.utcnow()
+            ))
+        return suggestions_list
     # Find all friendships where status = 'accepted'
     friendships = db.query(Friend).filter(
         and_(

@@ -1,26 +1,28 @@
+import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
+import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TextInput, 
-  TouchableOpacity, 
-  SafeAreaView, 
+import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
-import { useRouter } from "expo-router";
-import { COLORS, SPACING, SHADOWS } from "../theme/theme";
-import { Ionicons } from "@expo/vector-icons";
-import axios from "axios";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CONFIG } from "../constants/config";
+import { COLORS, SHADOWS, SPACING } from "../theme/theme";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const [usernameOrMobile, setUsernameOrMobile] = useState("");
   const [loading, setLoading] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const handleSubmit = async () => {
     const val = usernameOrMobile.trim();
@@ -79,11 +81,12 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+    <View style={styles.container}>
+      <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
+        <StatusBar style="light" translucent={true} />
         <View style={styles.content}>
           <View style={styles.header}>
             <View style={styles.iconContainer}>
@@ -113,7 +116,7 @@ export default function ForgotPasswordScreen() {
               </View>
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.btn, loading ? styles.btnDisabled : null]}
               onPress={handleSubmit}
               disabled={loading}
@@ -127,7 +130,7 @@ export default function ForgotPasswordScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 

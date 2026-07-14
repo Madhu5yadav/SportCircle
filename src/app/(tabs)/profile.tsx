@@ -1,32 +1,32 @@
-import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  Image, 
-  TouchableOpacity, 
-  ScrollView, 
-  TextInput, 
-  ActivityIndicator,
-  Alert,
-  Modal,
-  SafeAreaView,
-  StatusBar
-} from "react-native";
-import { useRouter } from "expo-router";
-import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS, SPACING, SHADOWS } from "../../theme/theme";
+import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useDispatch, useSelector } from "react-redux";
+import { logout, updateWallet } from "../../redux/authSlice";
 import { RootState } from "../../redux/store";
 import api from "../../services/api";
-import { StorageService } from "../../services/storage";
-import { logout, updateWallet } from "../../redux/authSlice";
 import { SocketService } from "../../services/socket";
+import { StorageService } from "../../services/storage";
+import { COLORS, SHADOWS, SPACING } from "../../theme/theme";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
   const auth = useSelector((state: RootState) => state.auth);
+  const insets = useSafeAreaInsets();
 
   // States
   const [preferredSports, setPreferredSports] = useState<string[]>([]);
@@ -35,7 +35,7 @@ export default function ProfileScreen() {
   const [games, setGames] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [depositAmount, setDepositAmount] = useState("");
-  
+
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showGameHistoryModal, setShowGameHistoryModal] = useState(false);
   const [showPaymentHistoryModal, setShowPaymentHistoryModal] = useState(false);
@@ -49,7 +49,7 @@ export default function ProfileScreen() {
       const res = await api.get("/profile");
       setPreferredSports(res.data.preferred_sports || []);
       setPlayingTime(res.data.playing_time || []);
-      
+
       const txs = await api.get("/profile/payments");
       setTxHistory(txs.data);
 
@@ -97,7 +97,7 @@ export default function ProfileScreen() {
         onPress: async () => {
           try {
             await api.post("/logout");
-          } catch (e) {}
+          } catch (e) { }
           await StorageService.clearAll();
           SocketService.disconnect();
           dispatch(logout());
@@ -111,22 +111,30 @@ export default function ProfileScreen() {
   const userGames = games.filter((g: any) => g.is_joined || g.host_id === auth.user?.id);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1E6AF7" />
-      
+    <View style={styles.container}>
+      <StatusBar style="light" translucent={true} />
+      {/* 1. Curved Blue Top Header Background (Moves with scroll) */}
+      <View style={[styles.headertop,
+      {
+        height: 60 + insets.top,
+        paddingTop: insets.top
+      }
+      ]}>
+        <Text style={styles.headerUsername}>@{auth.user?.username || "UserName"}</Text>
+      </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+
         {/* 1. Curved Blue Top Header Background (Moves with scroll) */}
         <View style={styles.headerBackground}>
-          <Text style={styles.headerUsername}>@{auth.user?.username || "UserName"}</Text>
         </View>
 
         {/* 2. Overlapping Light Blue Profile Card */}
         <View style={styles.profileCard}>
           {/* Circular Avatar + Details Column */}
           <View style={styles.profileHeaderRow}>
-            <Image 
-              source={{ uri: auth.user?.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250" }} 
-              style={styles.avatar} 
+            <Image
+              source={{ uri: auth.user?.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250" }}
+              style={styles.avatar}
             />
             <View style={styles.detailsColumn}>
               <Text style={styles.fullName}>{auth.user?.first_name} {auth.user?.last_name}</Text>
@@ -142,7 +150,7 @@ export default function ProfileScreen() {
               <Text style={styles.statLabel}>Total Matches</Text>
               <View style={styles.statValueRow}>
                 <Ionicons name="football" size={16} color={COLORS.primary} />
-                <Text style={styles.statValue}>{userGames.length || 10}</Text>
+                <Text style={styles.statValue}>{userGames.length || 0}</Text>
               </View>
             </View>
             <View style={styles.statDivider} />
@@ -229,9 +237,9 @@ export default function ProfileScreen() {
           </TouchableOpacity>
 
           {/* Logout */}
-          <TouchableOpacity style={styles.optionRow} onPress={handleLogout}>
-            <Text style={styles.optionText}>Logout</Text>
-            <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
+          <TouchableOpacity style={[styles.optionRow, { borderColor: COLORS.error, borderWidth: 1 }]} onPress={handleLogout}>
+            <Text style={[styles.optionText, { color: COLORS.error }]}>Logout</Text>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.error} />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -249,7 +257,7 @@ export default function ProfileScreen() {
 
             <View style={styles.walletBalanceCard}>
               <Text style={styles.balanceLabel}>Current Balance</Text>
-              <Text style={styles.balanceVal}>Rs. {auth.wallet?.balance.toFixed(2) || "0.00"}</Text>
+              <Text style={styles.balanceVal}>Rs. {Number(auth.wallet?.balance || 0).toFixed(2)}</Text>
             </View>
 
             <Text style={styles.inputLabel}>Add Cash (Rs.)</Text>
@@ -420,7 +428,7 @@ export default function ProfileScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -432,14 +440,22 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
+  headertop: {
+    backgroundColor: COLORS.primary,
+    position: 'absolute',
+    zIndex: 100,
+    width: '100%',
+    justifyContent: "center",
+    alignItems: "center",
+    ...SHADOWS.medium,
+  },
   headerBackground: {
-    backgroundColor: "#1E6AF7",
+    backgroundColor: COLORS.primary,
     height: 160,
     borderBottomLeftRadius: 36,
     borderBottomRightRadius: 36,
     justifyContent: "center",
     alignItems: "center",
-    paddingTop: 10,
     ...SHADOWS.medium,
   },
   headerUsername: {
@@ -448,10 +464,10 @@ const styles = StyleSheet.create({
     color: COLORS.surface,
   },
   profileCard: {
-    backgroundColor: "#D5E5FD",
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 24,
     marginHorizontal: SPACING.xl,
-    marginTop: -40, // Overlaps the blue header curve
+    marginTop: -60, // Overlaps the blue header curve
     padding: SPACING.xl,
     borderWidth: 1,
     borderColor: "#B1CEFC",

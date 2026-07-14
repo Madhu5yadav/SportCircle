@@ -16,3 +16,4 @@ export const CONFIG = {
   SOCKET_URL: `http://${DEV_HOST}:8000`,
   GOOGLE_MAPS_KEY: "", // Configured in app.json if needed
 };
+
