@@ -301,6 +301,7 @@ class BookingCreate(BaseModel):
     end_time: time
     amount_paid: Decimal
     game_id: Optional[int] = None
+    payment_method: str = "wallet"
 
 class BookingResponse(BaseModel):
     id: int

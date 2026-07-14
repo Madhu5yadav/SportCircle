@@ -46,13 +46,14 @@ export default function SelectSlotsScreen() {
 
   // Multi-step booking flow states
   const [showFlowModal, setShowFlowModal] = useState(false);
-  const [bookingFlowStep, setBookingFlowStep] = useState<"select_type" | "select_game" | "request_access" | "select_payment_option" | "select_players">("select_type");
+  const [bookingFlowStep, setBookingFlowStep] = useState<"select_type" | "select_game" | "request_access" | "select_payment_option" | "select_players" | "select_payment_method">("select_type");
   const [myJoinedGames, setMyJoinedGames] = useState<any[]>([]);
   const [selectedGame, setSelectedGame] = useState<any | null>(null);
   const [bookingAccessStatus, setBookingAccessStatus] = useState<"none" | "pending" | "approved" | "rejected">("none");
   const [accessRequestLoading, setAccessRequestLoading] = useState(false);
   const [paymentOption, setPaymentOption] = useState<"full" | "split">("full");
   const [selectedPlayersForSplit, setSelectedPlayersForSplit] = useState<number[]>([]);
+  const [pendingPayableAmount, setPendingPayableAmount] = useState(0);
 
   const SESSIONS = ["All", "Morning", "Afternoon", "Evening", "Night"];
 
@@ -216,20 +217,27 @@ export default function SelectSlotsScreen() {
     setSelectedPlayersForSplit(currentUserId ? [currentUserId] : []);
   };
 
-  const executeFinalBooking = async (payableAmount: number) => {
+  const executeFinalBooking = async (payableAmount: number, paymentMethod: string) => {
     const selectedBlock = candidateBlocks.find(b => b.startIdx === selectedBlockIdx);
     if (!selectedBlock) return;
 
-    const balance = auth.wallet?.balance || 0;
-    if (balance < payableAmount) {
-      Alert.alert(
-        "Insufficient Balance", 
-        `Booking costs Rs. ${payableAmount}, but your wallet balance is Rs. ${balance}. Please add money.`,
-        [
-          { text: "Cancel" }
-        ]
-      );
-      return;
+    if (paymentMethod === "wallet") {
+      const balance = auth.wallet?.balance || 0;
+      if (balance < payableAmount) {
+        Alert.alert(
+          "Insufficient Balance", 
+          `Booking costs Rs. ${payableAmount}, but your wallet balance is Rs. ${balance}. Please add money.`,
+          [
+            { text: "Cancel" }
+          ]
+        );
+        return;
+      }
+    } else {
+      setBookingLoading(true);
+      setShowFlowModal(false);
+      // Simulate mock payment gateway load delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
     }
 
     setBookingLoading(true);
@@ -241,10 +249,11 @@ export default function SelectSlotsScreen() {
         start_time: selectedBlock.start_time_24 + ":00",
         end_time: selectedBlock.end_time_24 + ":00",
         amount_paid: payableAmount,
-        game_id: selectedGame ? selectedGame.id : null
+        game_id: selectedGame ? selectedGame.id : null,
+        payment_method: paymentMethod
       });
 
-      Alert.alert("Booking Confirmed!", `Successfully booked slot at ${params.venueName} for Rs. ${payableAmount}!`, [
+      Alert.alert("Booking Confirmed!", `Successfully booked slot at ${params.venueName} via ${paymentMethod.toUpperCase()} for Rs. ${payableAmount}!`, [
         { 
           text: "OK", 
           onPress: () => {
@@ -536,7 +545,8 @@ export default function SelectSlotsScreen() {
                   style={styles.optionBtn}
                   onPress={() => {
                     const price = parseFloat(params.pricePerHour || "0") * bookingDuration;
-                    executeFinalBooking(price);
+                    setPendingPayableAmount(price);
+                    setBookingFlowStep("select_payment_method");
                   }}
                 >
                   <View style={styles.optionIconWrapper}>
@@ -678,7 +688,8 @@ export default function SelectSlotsScreen() {
                   style={styles.optionBtn}
                   onPress={() => {
                     const price = parseFloat(params.pricePerHour || "0") * bookingDuration;
-                    executeFinalBooking(price);
+                    setPendingPayableAmount(price);
+                    setBookingFlowStep("select_payment_method");
                   }}
                 >
                   <View style={styles.optionIconWrapper}>
@@ -767,12 +778,84 @@ export default function SelectSlotsScreen() {
                     onPress={() => {
                       const share = parseFloat(params.pricePerHour || "0") * bookingDuration / selectedGame.participants.length;
                       const total = share * selectedPlayersForSplit.length;
-                      executeFinalBooking(total);
+                      setPendingPayableAmount(total);
+                      setBookingFlowStep("select_payment_method");
                     }}
                   >
                     <Text style={styles.confirmSplitText}>Confirm Booking</Text>
                   </TouchableOpacity>
                 </View>
+              </View>
+            )}
+            {/* Step: Select Payment Method */}
+            {bookingFlowStep === "select_payment_method" && (
+              <View>
+                <View style={styles.modalHeaderBorder}>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      if (selectedGame) {
+                        if (paymentOption === "split") {
+                          setBookingFlowStep("select_players");
+                        } else {
+                          setBookingFlowStep("select_payment_option");
+                        }
+                      } else {
+                        setBookingFlowStep("select_type");
+                      }
+                    }} 
+                    style={styles.backArrowBtn}
+                  >
+                    <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+                  </TouchableOpacity>
+                  <Text style={styles.modalTitle}>Payment Method</Text>
+                  <TouchableOpacity onPress={() => setShowFlowModal(false)} style={styles.modalCloseBtn}>
+                    <Ionicons name="close-circle" size={24} color={COLORS.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.paymentSummaryLabel}>Payable Amount: Rs. {pendingPayableAmount.toFixed(2)}</Text>
+
+                {/* Option: Wallet */}
+                <TouchableOpacity 
+                  style={styles.optionBtn}
+                  onPress={() => executeFinalBooking(pendingPayableAmount, "wallet")}
+                >
+                  <View style={styles.optionIconWrapper}>
+                    <Ionicons name="wallet-outline" size={22} color={COLORS.primary} />
+                  </View>
+                  <View style={styles.optionTextWrapper}>
+                    <Text style={styles.optionTitle}>SportCircle Wallet</Text>
+                    <Text style={styles.optionSubtitle}>Available Balance: Rs. {auth.wallet?.balance || "0"}</Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Option: UPI */}
+                <TouchableOpacity 
+                  style={[styles.optionBtn, { marginTop: 12 }]}
+                  onPress={() => executeFinalBooking(pendingPayableAmount, "upi")}
+                >
+                  <View style={styles.optionIconWrapper}>
+                    <Ionicons name="phone-portrait-outline" size={22} color={COLORS.primary} />
+                  </View>
+                  <View style={styles.optionTextWrapper}>
+                    <Text style={styles.optionTitle}>UPI (GPay / PhonePe / Paytm)</Text>
+                    <Text style={styles.optionSubtitle}>Pay instantly using any UPI app</Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Option: Card */}
+                <TouchableOpacity 
+                  style={[styles.optionBtn, { marginTop: 12 }]}
+                  onPress={() => executeFinalBooking(pendingPayableAmount, "card")}
+                >
+                  <View style={styles.optionIconWrapper}>
+                    <Ionicons name="card-outline" size={22} color={COLORS.primary} />
+                  </View>
+                  <View style={styles.optionTextWrapper}>
+                    <Text style={styles.optionTitle}>Credit / Debit Card</Text>
+                    <Text style={styles.optionSubtitle}>Pay securely using Visa, Mastercard, RuPay etc.</Text>
+                  </View>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -1245,5 +1328,18 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 14,
     color: COLORS.surface,
+  },
+  paymentSummaryLabel: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    backgroundColor: "#F4F7FD",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    textAlign: "center",
+    borderWidth: 1,
+    borderColor: "#E4ECFA",
   },
 });

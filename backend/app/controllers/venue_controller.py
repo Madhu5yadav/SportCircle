@@ -146,23 +146,26 @@ def book_venue(
             detail="This slot is already booked for this venue"
         )
         
-    # 2. Check wallet balance
-    wallet = db.query(Wallet).filter(Wallet.user_id == current_user.id).first()
-    if not wallet or wallet.balance < booking_in.amount_paid:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Insufficient wallet balance. Please add funds."
-        )
-        
-    # 3. Deduct balance
-    wallet.balance -= booking_in.amount_paid
-    
-    # 4. Save Payment History
+    # 2. Process payment method
+    if booking_in.payment_method == "wallet":
+        wallet = db.query(Wallet).filter(Wallet.user_id == current_user.id).first()
+        if not wallet or wallet.balance < booking_in.amount_paid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Insufficient wallet balance. Please add funds."
+            )
+        # Deduct balance
+        wallet.balance -= booking_in.amount_paid
+        description = f"Wallet Booking: {venue.name} on {booking_in.booking_date}"
+    else:
+        description = f"{booking_in.payment_method.upper()} Booking: {venue.name} on {booking_in.booking_date}"
+
+    # 3. Save Payment History
     history = PaymentHistory(
         user_id=current_user.id,
         amount=booking_in.amount_paid,
         type="debit",
-        description=f"Booking for {venue.name} on {booking_in.booking_date}"
+        description=description
     )
     db.add(history)
     
