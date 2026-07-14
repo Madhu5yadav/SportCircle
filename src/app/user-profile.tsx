@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,6 +25,9 @@ interface PublicUser {
   gender?: string;
   about?: string;
   profile_pic?: string;
+  trust_score?: number;
+  ratings_count?: number;
+  created_at: string;
 }
 
 interface PublicProfile {
@@ -45,6 +49,32 @@ export default function UserProfileScreen() {
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [squads, setSquads] = useState<any[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
+  const [showRateModal, setShowRateModal] = useState(false);
+  const [tempRating, setTempRating] = useState(0);
+  const [submittingRating, setSubmittingRating] = useState(false);
+
+  const handleRatePlayer = async () => {
+    if (tempRating < 1 || tempRating > 5) {
+      Alert.alert("Rating Required", "Please select a rating between 1 and 5 stars.");
+      return;
+    }
+
+    setSubmittingRating(true);
+    try {
+      await api.post(`/profile/${targetUserId}/rate`, {
+        rating: tempRating,
+      });
+      Alert.alert("Thank you!", "Your rating has been submitted successfully.");
+      setShowRateModal(false);
+      setTempRating(0);
+      fetchProfileAndSquads();
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.detail || "Failed to submit rating. Please try again.";
+      Alert.alert("Error", errorMsg);
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
 
   const fetchProfileAndSquads = async () => {
     setLoading(true);
@@ -199,7 +229,7 @@ export default function UserProfileScreen() {
         {/* 2. Profile Card */}
         <View style={styles.profileCard}>
           <Image
-            source={{ uri: user.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250" }}
+            source={{ uri: user.profile_pic || "https://cdn-icons-png.flaticon.com/512/149/149071.png" }}
             style={styles.avatar}
           />
           <View style={styles.userDetails}>
@@ -215,6 +245,19 @@ export default function UserProfileScreen() {
             <View style={styles.statColumn}>
               <Text style={styles.statLabel}>Mutual Friends</Text>
               <Text style={styles.statVal}>{mutual_friends_count}</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statColumn}>
+              <Text style={styles.statLabel}>Trust Score</Text>
+              <View style={styles.statValueRow}>
+                <Ionicons name="star" size={16} color="#FFD700" style={{ marginRight: 4 }} />
+                <Text style={styles.statVal}>
+                  {user.trust_score && user.trust_score > 0
+                    ? (user.trust_score % 1 === 0 ? user.trust_score.toString() : user.trust_score.toFixed(1))
+                    : "0"}
+                  /5
+                </Text>
+              </View>
             </View>
           </View>
         </View>
@@ -268,21 +311,87 @@ export default function UserProfileScreen() {
                   <Text style={styles.selfInfoText}>This is your public profile.</Text>
                 </View>
               )}
+
+              {/* Rate Player Button */}
+              {friendship_status !== "self" && (
+                <TouchableOpacity style={[styles.actionBtn, styles.btnRate, { marginTop: 12 }]} onPress={() => setShowRateModal(true)}>
+                  <Ionicons name="star-outline" size={20} color={COLORS.primary} />
+                  <Text style={styles.rateBtnText}>Rate Player</Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
         </View>
+
+        {/* Rating Modal */}
+        <Modal
+          visible={showRateModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowRateModal(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalBackdrop} 
+            activeOpacity={1} 
+            onPress={() => setShowRateModal(false)}
+          >
+            <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+              <View style={styles.modalDragHandle} />
+              <Text style={styles.modalTitle}>Rate Player</Text>
+              <Text style={styles.modalSubtitle}>Rate @{user.username}'s trust score during games</Text>
+              
+              <View style={styles.starsContainer}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <TouchableOpacity
+                    key={star}
+                    onPress={() => setTempRating(star)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons 
+                      name={star <= tempRating ? "star" : "star-outline"} 
+                      size={40} 
+                      color={star <= tempRating ? "#FFD700" : COLORS.border} 
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.submitRatingBtn, submittingRating ? styles.btnDisabled : null]}
+                onPress={handleRatePlayer}
+                disabled={submittingRating}
+              >
+                {submittingRating ? (
+                  <ActivityIndicator color={COLORS.surface} />
+                ) : (
+                  <Text style={styles.submitRatingBtnText}>Submit Rating</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
         {/* 4. Preferred Sports Section */}
         <View style={styles.sectionContainer}>
           <Text style={styles.sectionTitle}>Preferred Sports</Text>
           {preferred_sports.length > 0 ? (
             <View style={styles.badgeContainer}>
-              {preferred_sports.map((sport, index) => (
-                <View key={index} style={styles.sportBadge}>
-                  <MaterialCommunityIcons name={getSportIcon(sport) as any} size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
-                  <Text style={styles.sportBadgeText}>{sport}</Text>
-                </View>
-              ))}
+              {preferred_sports.map((sport, index) => {
+                const details = (profile as any).preferred_sports_details?.find((s: any) => s.name === sport);
+                const level = details ? details.level : "Beginner";
+                const levelColor = level === "Beginner" ? "#4CAF50" : level === "Intermediate" ? "#FF9800" : "#E91E63";
+                const letter = level ? level.charAt(0).toUpperCase() : "B";
+
+                return (
+                  <View key={index} style={[styles.sportBadge, { position: "relative", paddingLeft: 18 }]}>
+                    <View style={[styles.levelCircle, { backgroundColor: levelColor }]}>
+                      <Text style={styles.levelCircleText}>{letter}</Text>
+                    </View>
+                    <MaterialCommunityIcons name={getSportIcon(sport) as any} size={16} color={COLORS.primary} style={{ marginRight: 6 }} />
+                    <Text style={styles.sportBadgeText}>{sport}</Text>
+                  </View>
+                );
+              })}
             </View>
           ) : (
             <Text style={styles.emptyText}>No preferred sports selected.</Text>
@@ -420,7 +529,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.border,
     paddingVertical: 12,
+    flexDirection: "row",
+    justifyContent: "space-evenly",
     alignItems: "center",
+    marginTop: SPACING.md,
   },
   statColumn: {
     alignItems: "center",
@@ -544,5 +656,105 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.sizes.md,
     color: COLORS.textSecondary,
     fontStyle: "italic",
+  },
+  levelCircle: {
+    position: "absolute",
+    top: -5,
+    left: -5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  levelCircleText: {
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
+    fontSize: 8,
+    color: "white",
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: COLORS.border,
+    height: "80%",
+  },
+  statValueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  btnRate: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+  },
+  rateBtnText: {
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
+    fontSize: TYPOGRAPHY.sizes.md,
+    color: COLORS.primary,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    width: "85%",
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: 30,
+    paddingTop: SPACING.sm,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  modalDragHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: "#E4ECFA",
+    borderRadius: 2.5,
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
+    fontSize: TYPOGRAPHY.sizes.xl,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
+  modalSubtitle: {
+    fontFamily: TYPOGRAPHY.fontFamily.regular,
+    fontSize: TYPOGRAPHY.sizes.sm,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    marginBottom: 20,
+    marginTop: 6,
+    paddingHorizontal: SPACING.sm,
+  },
+  starsContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginVertical: 20,
+  },
+  submitRatingBtn: {
+    backgroundColor: COLORS.primary,
+    width: "100%",
+    height: 50,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 10,
+  },
+  submitRatingBtnText: {
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
+    fontSize: TYPOGRAPHY.sizes.md,
+    color: COLORS.surface,
   },
 });

@@ -13,7 +13,8 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Linking
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
@@ -29,9 +30,56 @@ const CAROUSEL_WIDTH = width - SPACING.xl * 2;
 
 // Unsplash sports photos for stunning visuals
 const SPONSOR_BANNERS = [
-  { id: 1, title: "Summer Football Cup '26", subtitle: "Register your squad & win Rs. 25,000!", image: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=600&auto=format&fit=crop" },
-  { id: 2, title: "Badminton Doubles Clash", subtitle: "20% off booking fees this weekend", image: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=600&auto=format&fit=crop" },
-  { id: 3, title: "Weekly Cricket League", subtitle: "Host a match & earn double rewards", image: "https://images.unsplash.com/photo-1531415080290-bc98545ab2ef?q=80&w=600&auto=format&fit=crop" },
+  { 
+    id: 1, 
+    title: "Thala's Wicketkeeping Special", 
+    subtitle: "CSK fan jersey & gear: Flat 20% off at Chennai Sports!", 
+    tag: "Chennai Special",
+    image: "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=800",
+    url: "https://www.chennaisuperkings.com/shop",
+    sport: "Cricket",
+    location: "Chennai"
+  },
+  { 
+    id: 2, 
+    title: "Puma India x Virat Kohli", 
+    subtitle: "Flat 25% off on Virat's running shoes in local Chennai stores.", 
+    tag: "Limited Offer",
+    image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=800",
+    url: "https://in.puma.com/in/en/collaborations/collaborations-sports/puma-x-one8",
+    sport: "Running",
+    location: "Chennai"
+  },
+  { 
+    id: 3, 
+    title: "PV Sindhu's Yonex Smash", 
+    subtitle: "Yonex badminton rackets & shuttlecocks at 15% off today.", 
+    tag: "Best Seller",
+    image: "https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?q=80&w=800",
+    url: "https://www.yonex.com/badminton",
+    sport: "Badminton",
+    location: "India"
+  },
+  { 
+    id: 4, 
+    title: "Sachin's Cricket Academy", 
+    subtitle: "Join Chennai junior camps. Get free custom cricket kits!", 
+    tag: "Trending",
+    image: "https://images.unsplash.com/photo-1530541930197-ff16ac917b0e?q=80&w=800",
+    url: "https://www.sachintendulkar.com/",
+    sport: "Cricket",
+    location: "Chennai"
+  },
+  { 
+    id: 5, 
+    title: "LeBron's Chennai Tour", 
+    subtitle: "Buy Nike basketball sneakers & get free accessories.", 
+    tag: "Exclusive",
+    image: "https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=800",
+    url: "https://www.nike.com/in/w/lebron-james-shoes-5e1x6zy7ok",
+    sport: "Basketball",
+    location: "Chennai"
+  },
 ];
 
 export default function HomeScreen() {
@@ -53,6 +101,28 @@ export default function HomeScreen() {
   const [upcomingGames, setUpcomingGames] = useState<any[]>([]);
   const [recommendedGames, setRecommendedGames] = useState<any[]>([]);
   const [nearbyTurfs, setNearbyTurfs] = useState<any[]>([]);
+  const [preferredSports, setPreferredSports] = useState<string[]>([]);
+
+  const getDynamicBanners = () => {
+    const isChennaiUser = currentAddress?.toLowerCase().includes("chennai") || 
+      (auth.user?.latitude && Math.abs(auth.user.latitude - 13.0827) < 0.5);
+
+    return [...SPONSOR_BANNERS].sort((a, b) => {
+      const aMatchesSport = preferredSports.some(sp => sp.toLowerCase() === a.sport.toLowerCase());
+      const bMatchesSport = preferredSports.some(sp => sp.toLowerCase() === b.sport.toLowerCase());
+      
+      if (aMatchesSport && !bMatchesSport) return -1;
+      if (!aMatchesSport && bMatchesSport) return 1;
+
+      const aMatchesLoc = isChennaiUser && a.location === "Chennai";
+      const bMatchesLoc = isChennaiUser && b.location === "Chennai";
+
+      if (aMatchesLoc && !bMatchesLoc) return -1;
+      if (!aMatchesLoc && bMatchesLoc) return 1;
+
+      return 0;
+    });
+  };
   const [suggestedPlayers, setSuggestedPlayers] = useState<any[]>([]);
   const [currentAddress, setCurrentAddress] = useState("Acquiring location...");
 
@@ -131,6 +201,7 @@ export default function HomeScreen() {
       try {
         const profileRes = await api.get("/profile");
         const prefSports = profileRes.data.preferred_sports || [];
+        setPreferredSports(prefSports);
         setRecommendedGames(futureGames.filter((g: any) => prefSports.includes(g.sport_type) && !g.is_joined));
         // Sync Redux wallet balance in case of updates
         dispatch(updateWallet(parseFloat(profileRes.data.wallet.balance)));
@@ -188,7 +259,9 @@ export default function HomeScreen() {
     if (loading && !refreshing) return;
 
     const timer = setTimeout(() => {
-      const nextIndex = (bannerIndex + 1) % SPONSOR_BANNERS.length;
+      const banners = getDynamicBanners();
+      if (banners.length === 0) return;
+      const nextIndex = (bannerIndex + 1) % banners.length;
       scrollViewRef.current?.scrollTo({
         x: nextIndex * CAROUSEL_WIDTH,
         animated: true,
@@ -197,7 +270,7 @@ export default function HomeScreen() {
     }, 4000); // Auto scroll every 4 seconds
 
     return () => clearTimeout(timer);
-  }, [bannerIndex, loading, refreshing]);
+  }, [bannerIndex, loading, refreshing, preferredSports, currentAddress]);
 
   const handleAddFriend = async (friendId: number) => {
     try {
@@ -279,16 +352,34 @@ export default function HomeScreen() {
                 onMomentumScrollEnd={handleBannerScroll}
                 style={styles.bannerScroll}
               >
-                {SPONSOR_BANNERS.map((banner) => (
-                  <View key={banner.id} style={styles.bannerCard}>
+                {getDynamicBanners().map((banner) => (
+                  <TouchableOpacity 
+                    key={banner.id} 
+                    style={styles.bannerCard}
+                    activeOpacity={0.9}
+                    onPress={() => {
+                      if (banner.url) {
+                        Linking.openURL(banner.url).catch((err) => {
+                          console.log("Could not open URL:", err);
+                        });
+                      }
+                    }}
+                  >
                     <Image source={{ uri: banner.image }} style={styles.bannerImg} />
-                  </View>
+                    <View style={styles.bannerOverlay}>
+                      <View style={styles.bannerTag}>
+                        <Text style={styles.bannerTagText}>{banner.tag}</Text>
+                      </View>
+                      <Text style={styles.bannerTitle} numberOfLines={1}>{banner.title}</Text>
+                      <Text style={styles.bannerSubtitle} numberOfLines={2}>{banner.subtitle}</Text>
+                    </View>
+                  </TouchableOpacity>
                 ))}
               </ScrollView>
 
               {/* Banner dots */}
               <View style={styles.bannerDots}>
-                {SPONSOR_BANNERS.map((_, idx) => (
+                {getDynamicBanners().map((_, idx) => (
                   <View
                     key={idx}
                     style={[
@@ -435,7 +526,7 @@ export default function HomeScreen() {
                           style={{ alignItems: "center" }}
                           onPress={() => router.push({ pathname: "/user-profile", params: { userId: player.friend_id || player.id } })}
                         >
-                          <Image source={{ uri: player.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150" }} style={styles.playerAvatar} />
+                          <Image source={{ uri: player.profile_pic || "https://cdn-icons-png.flaticon.com/512/149/149071.png" }} style={styles.playerAvatar} />
                           <Text style={styles.playerName} numberOfLines={1}>{player.username}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.addFriendBtn} onPress={() => handleAddFriend(player.friend_id || player.id)}>
@@ -537,9 +628,57 @@ const styles = StyleSheet.create({
     height: 150,
   },
   bannerImg: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     width: "100%",
     height: "100%",
+    borderRadius: 16,
     resizeMode: "cover",
+  },
+  bannerOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    top: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    padding: SPACING.lg,
+    justifyContent: "flex-end",
+    borderRadius: 16,
+  },
+  bannerTag: {
+    backgroundColor: "#FFD700",
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+  bannerTagText: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 9,
+    color: "#000000",
+    textTransform: "uppercase",
+  },
+  bannerTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 18,
+    color: "#ffffff",
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 4,
+  },
+  bannerSubtitle: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: "#E4ECFA",
+    marginTop: 2,
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 4,
   },
   bannerDots: {
     flexDirection: "row",

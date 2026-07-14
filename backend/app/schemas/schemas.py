@@ -61,9 +61,15 @@ class PersonalDetailsCreate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     profile_pic: Optional[str] = None
+    about: Optional[str] = None
+
+class SportDetail(BaseModel):
+    name: str
+    level: str
 
 class PreferredSportsCreate(BaseModel):
     sports: List[str]
+    levels: Optional[List[str]] = None
 
 class UserResponse(BaseModel):
     id: int
@@ -78,6 +84,8 @@ class UserResponse(BaseModel):
     about: Optional[str] = None
     profile_pic: Optional[str] = None
     role: str = "player"
+    trust_score: float = 0.0
+    ratings_count: int = 0
     created_at: datetime
 
     class Config:
@@ -112,6 +120,7 @@ class SettingsResponse(BaseModel):
 class ProfileResponse(BaseModel):
     user: UserResponse
     preferred_sports: List[str]
+    preferred_sports_details: Optional[List[SportDetail]] = None
     playing_time: List[str]
     wallet: WalletResponse
     settings: SettingsResponse
@@ -127,6 +136,8 @@ class PublicProfileUserResponse(BaseModel):
     gender: Optional[str] = None
     about: Optional[str] = None
     profile_pic: Optional[str] = None
+    trust_score: float = 0.0
+    ratings_count: int = 0
     created_at: datetime
     class Config:
         from_attributes = True
@@ -134,6 +145,7 @@ class PublicProfileUserResponse(BaseModel):
 class PublicProfileResponse(BaseModel):
     user: PublicProfileUserResponse
     preferred_sports: List[str]
+    preferred_sports_details: Optional[List[SportDetail]] = None
     playing_time: List[str]
     friendship_status: str
     friendship_id: Optional[int] = None
@@ -149,6 +161,7 @@ class ProfileUpdate(BaseModel):
     about: Optional[str] = None
     profile_pic: Optional[str] = None
     sports: Optional[List[str]] = None
+    sports_levels: Optional[List[str]] = None
     playing_time: Optional[List[str]] = None
 
 class WalletAddFunds(BaseModel):
@@ -182,6 +195,7 @@ class SquadMemberResponse(BaseModel):
     username: str
     profile_pic: Optional[str] = None
     role: str
+    status: str = "pending"
     joined_at: datetime
     class Config:
         from_attributes = True
@@ -226,11 +240,29 @@ class GameCreate(BaseModel):
     gender: str  # male, female, all
     equipment_required: Optional[str] = None
     description: Optional[str] = None
+    squad_id: Optional[int] = None
+
+class GameUpdate(BaseModel):
+    name: Optional[str] = None
+    sport_type: Optional[str] = None
+    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    game_date: Optional[date] = None
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
+    access: Optional[str] = None
+    player_count: Optional[int] = None
+    entry_fee: Optional[Decimal] = None
+    gender: Optional[str] = None
+    equipment_required: Optional[str] = None
+    description: Optional[str] = None
 
 class ParticipantResponse(BaseModel):
     user_id: int
     username: str
     profile_pic: Optional[str] = None
+    status: str = "joined"  # joined, waiting
     joined_at: datetime
     class Config:
         from_attributes = True
@@ -376,3 +408,6 @@ class NotificationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class RateUserRequest(BaseModel):
+    rating: int

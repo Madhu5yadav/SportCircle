@@ -11,15 +11,18 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  Image
+  Image,
+  Modal,
+  Dimensions
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams, Stack } from "expo-router";
 import { useDispatch } from "react-redux";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from "../theme/theme";
 import { Ionicons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "../services/api";
 import { updateUser } from "../redux/authSlice";
 
@@ -31,9 +34,33 @@ const PLAYING_TIMES = [
   { id: "Night", label: "Night (9 PM - 5 AM)", icon: "cloudy-night-outline" }
 ];
 
+const { width } = Dimensions.get("window");
+const ITEM_WIDTH = (width - SPACING.xl * 2 - SPACING.md * 2) / 3;
+
+const SPORTS_LIST = [
+  { id: "Cricket", label: "Cricket", icon: "cricket" },
+  { id: "Football", label: "Football", icon: "soccer" },
+  { id: "Basketball", label: "Basketball", icon: "basketball" },
+  { id: "Badminton", label: "Badminton", icon: "badminton" },
+  { id: "Volleyball", label: "Volleyball", icon: "volleyball" },
+  { id: "Kabaddi", label: "Kabaddi", icon: "run" },
+  { id: "Kho Kho", label: "Kho Kho", icon: "run-fast" },
+  { id: "Swimming", label: "Swimming", icon: "swim" },
+  { id: "Running", label: "Running", icon: "walk" },
+  { id: "Golf", label: "Golf", icon: "golf" },
+  { id: "Bowling", label: "Bowling", icon: "bowling" },
+  { id: "Hockey", label: "Hockey", icon: "hockey-sticks" },
+  { id: "Rugby", label: "Rugby", icon: "rugby" },
+  { id: "Table Tennis", label: "Table Tennis", icon: "table-tennis" },
+  { id: "Pickleball", label: "Pickleball", icon: "racquetball" },
+  { id: "Tennis", label: "Tennis", icon: "tennis" },
+];
+
 export default function PersonalDetailsScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
+  const { mode } = useLocalSearchParams();
+  const isEdit = mode === "edit";
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -41,10 +68,15 @@ export default function PersonalDetailsScreen() {
   const [dobDate, setDobDate] = useState<Date>(new Date(2000, 0, 1));
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [gender, setGender] = useState("");
+  const [about, setAbout] = useState("");
   const [selectedTimes, setSelectedTimes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  
+  // Sports States
+  const [selectedSports, setSelectedSports] = useState<{ id: string; level: string }[]>([]);
+  const [activeSport, setActiveSport] = useState<string | null>(null);
   
   // Location States
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -67,6 +99,7 @@ export default function PersonalDetailsScreen() {
             if (!isNaN(parsed.getTime())) setDobDate(parsed);
           }
           if (u.gender) setGender(u.gender);
+          if (u.about) setAbout(u.about);
           if (u.profile_pic) setProfileImage(u.profile_pic);
           if (u.latitude && u.longitude) {
             setCoords({ latitude: u.latitude, longitude: u.longitude });
@@ -76,6 +109,13 @@ export default function PersonalDetailsScreen() {
         }
         if (profileData.playing_time && profileData.playing_time.length > 0) {
           setSelectedTimes(profileData.playing_time);
+        }
+        
+        // Load preferred sports
+        if (profileData.preferred_sports_details && profileData.preferred_sports_details.length > 0) {
+          setSelectedSports(profileData.preferred_sports_details.map((s: any) => ({ id: s.name, level: s.level })));
+        } else if (profileData.preferred_sports && profileData.preferred_sports.length > 0) {
+          setSelectedSports(profileData.preferred_sports.map((s: any) => ({ id: s, level: "Beginner" })));
         }
         
         if (!hasLocation) {
@@ -121,6 +161,21 @@ export default function PersonalDetailsScreen() {
     } else {
       setSelectedTimes([...selectedTimes, id]);
     }
+  };
+
+  const handleSelectSportLevel = (sportId: string, level: string) => {
+    const existing = selectedSports.find((s) => s.id === sportId);
+    if (existing) {
+      setSelectedSports(selectedSports.map((s) => s.id === sportId ? { ...s, level } : s));
+    } else {
+      setSelectedSports([...selectedSports, { id: sportId, level }]);
+    }
+    setActiveSport(null);
+  };
+
+  const handleDeselectSport = (sportId: string) => {
+    setSelectedSports(selectedSports.filter((s) => s.id !== sportId));
+    setActiveSport(null);
   };
 
   const pickImage = async (source: "camera" | "gallery") => {
@@ -229,6 +284,9 @@ export default function PersonalDetailsScreen() {
         uploadedUrl = await uploadProfileImage();
       }
 
+      const defaultAvatar = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+      const finalProfilePic = uploadedUrl || defaultAvatar;
+
       await api.put("/profile/personal-details", {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
@@ -237,7 +295,8 @@ export default function PersonalDetailsScreen() {
         playing_time: selectedTimes,
         latitude: coords?.latitude,
         longitude: coords?.longitude,
-        profile_pic: uploadedUrl || undefined,
+        profile_pic: finalProfilePic,
+        about: about.trim() || undefined,
       });
 
       // Update local Redux store user profile
@@ -249,12 +308,25 @@ export default function PersonalDetailsScreen() {
           gender: gender,
           latitude: coords?.latitude || undefined,
           longitude: coords?.longitude || undefined,
-          about: `Playing: ${selectedTimes.join(",")}`,
-          profile_pic: uploadedUrl || undefined,
+          about: about.trim() || undefined,
+          profile_pic: finalProfilePic,
         })
       );
 
-      router.push("/preferred-sports");
+      // Also save sports if in edit mode (or always save if any selected)
+      if (selectedSports.length > 0) {
+        await api.post("/profile/preferred-sports", {
+          sports: selectedSports.map((s) => s.id),
+          levels: selectedSports.map((s) => s.level),
+        });
+      }
+
+      if (isEdit) {
+        Alert.alert("Success", "Profile updated successfully!");
+        router.back();
+      } else {
+        router.push("/preferred-sports");
+      }
     } catch (error: any) {
       const errorMsg = error.response?.data?.detail || "Failed to save personal details. Please try again.";
       Alert.alert("Error", errorMsg);
@@ -265,6 +337,12 @@ export default function PersonalDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Stack.Screen 
+        options={{ 
+          title: isEdit ? "Edit Profile" : "Personal Details",
+          headerLeft: isEdit ? undefined : () => null
+        }} 
+      />
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -293,8 +371,8 @@ export default function PersonalDetailsScreen() {
             )}
           </View>
 
-          <Text style={styles.sectionTitle}>Tell Us About Yourself</Text>
-          <Text style={styles.sectionSubtitle}>Help us customize your SportCircle feed!</Text>
+          <Text style={styles.sectionTitle}>{isEdit ? "Update Your Profile" : "Tell Us About Yourself"}</Text>
+          <Text style={styles.sectionSubtitle}>{isEdit ? "Keep your location and personal info up to date." : "Help us customize your SportCircle feed!"}</Text>
 
           {/* Location Request Panel */}
           <View style={styles.locationPanel}>
@@ -423,6 +501,19 @@ export default function PersonalDetailsScreen() {
             </View>
           </View>
 
+          {/* About / Bio */}
+          <View style={styles.inputWrapper}>
+            <Text style={styles.label}>About / Bio</Text>
+            <TextInput
+              style={[styles.input, { height: 80, textAlignVertical: "top", paddingTop: 12 }]}
+              placeholder="Tell other players a bit about yourself..."
+              placeholderTextColor={COLORS.textSecondary}
+              multiline
+              value={about}
+              onChangeText={setAbout}
+            />
+          </View>
+
           {/* Preferred Playing Time */}
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>Preferred Playing Time</Text>
@@ -458,6 +549,43 @@ export default function PersonalDetailsScreen() {
             </View>
           </View>
 
+          {/* Preferred Sports Section */}
+          <View style={styles.inputWrapper}>
+            <Text style={styles.label}>Preferred Sports</Text>
+            <Text style={{ fontFamily: "Poppins_400Regular", fontSize: 12, color: COLORS.textSecondary, marginBottom: 10 }}>
+              Tap a sport to select it and choose your skill level.
+            </Text>
+            <View style={styles.sportsGrid}>
+              {SPORTS_LIST.map((sport) => {
+                const selectedItem = selectedSports.find((s) => s.id === sport.id);
+                const isSelected = !!selectedItem;
+                return (
+                  <TouchableOpacity
+                    key={sport.id}
+                    style={[styles.sportGridItem, isSelected ? styles.sportItemSelected : null]}
+                    onPress={() => setActiveSport(sport.id)}
+                  >
+                    {isSelected && (
+                      <View style={styles.sportLevelBadge}>
+                        <Text style={styles.sportLevelBadgeText}>{selectedItem.level.slice(0, 3).toUpperCase()}</Text>
+                      </View>
+                    )}
+                    <View style={[styles.sportIconWrapper, isSelected ? styles.sportIconSelected : null]}>
+                      <MaterialCommunityIcons
+                        name={sport.icon as any}
+                        size={28}
+                        color={isSelected ? COLORS.surface : COLORS.primary}
+                      />
+                    </View>
+                    <Text style={[styles.sportLabel, isSelected ? styles.sportLabelSelected : null]} numberOfLines={1}>
+                      {sport.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
           {/* Submit */}
           <TouchableOpacity 
             style={[styles.submitBtn, loading ? styles.submitBtnDisabled : null]}
@@ -468,14 +596,62 @@ export default function PersonalDetailsScreen() {
               <ActivityIndicator color={COLORS.surface} />
             ) : (
               <>
-                <Text style={styles.submitBtnText}>Save & Next</Text>
-                <Ionicons name="arrow-forward" size={18} color={COLORS.surface} style={{ marginLeft: 8 }} />
+                <Text style={styles.submitBtnText}>{isEdit ? "Save Changes" : "Save & Next"}</Text>
+                <Ionicons name={isEdit ? "checkmark-circle" : "arrow-forward"} size={18} color={COLORS.surface} style={{ marginLeft: 8 }} />
               </>
             )}
           </TouchableOpacity>
           
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Sport Level Picker Modal */}
+      <Modal
+        visible={activeSport !== null}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setActiveSport(null)}
+      >
+        <TouchableOpacity
+          style={styles.sportModalBackdrop}
+          activeOpacity={1}
+          onPress={() => setActiveSport(null)}
+        >
+          <View style={styles.sportModalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.sportModalHandle} />
+            <Text style={styles.sportModalTitle}>Select Your Level</Text>
+            <Text style={styles.sportModalSubtitle}>How skilled are you in {activeSport}?</Text>
+
+            <View style={{ gap: 12 }}>
+              {["Beginner", "Intermediate", "Professional"].map((level) => {
+                const isCurrent = activeSport ? selectedSports.find((s) => s.id === activeSport)?.level === level : false;
+                return (
+                  <TouchableOpacity
+                    key={level}
+                    style={[styles.sportLevelBtn, isCurrent ? styles.sportLevelBtnActive : null]}
+                    onPress={() => activeSport && handleSelectSportLevel(activeSport, level)}
+                  >
+                    <Text style={[styles.sportLevelBtnText, isCurrent ? styles.sportLevelBtnTextActive : null]}>
+                      {level}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              {activeSport && selectedSports.some((s) => s.id === activeSport) && (
+                <TouchableOpacity
+                  style={{ paddingVertical: 12, alignItems: "center", marginTop: 4 }}
+                  onPress={() => handleDeselectSport(activeSport)}
+                >
+                  <Text style={{ fontFamily: "Poppins_600SemiBold", fontSize: 14, color: COLORS.error }}>
+                    Remove Sport
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -583,11 +759,14 @@ const styles = StyleSheet.create({
   },
   locationBtn: {
     backgroundColor: COLORS.background,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.primary,
+    minWidth: 70,
+    alignItems: "center",
+    justifyContent: "center",
   },
   locationBtnSuccess: {
     backgroundColor: COLORS.success + "20",
@@ -595,7 +774,7 @@ const styles = StyleSheet.create({
   },
   locationBtnText: {
     fontFamily: "Poppins_600SemiBold",
-    fontSize: 13,
+    fontSize: 11,
     color: COLORS.primary,
   },
   locationBtnTextSuccess: {
@@ -712,7 +891,6 @@ const styles = StyleSheet.create({
   },
   checkboxActive: {
     borderColor: COLORS.primary,
-    backgroundColor: COLORS.cardBackground + "40",
   },
   checkboxLabel: {
     fontFamily: "Poppins_400Regular",
@@ -757,6 +935,126 @@ const styles = StyleSheet.create({
   submitBtnText: {
     fontFamily: "Poppins_600SemiBold",
     fontSize: 16,
+    color: COLORS.surface,
+  },
+  // Sports Grid Styles
+  sportsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  sportGridItem: {
+    width: ITEM_WIDTH,
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.border,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACING.sm,
+    position: "relative",
+    overflow: "hidden",
+    ...SHADOWS.soft,
+  },
+  sportItemSelected: {
+    borderColor: COLORS.primary,
+  },
+  sportIconWrapper: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: COLORS.background,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+  sportIconSelected: {
+    backgroundColor: COLORS.primary,
+  },
+  sportLabel: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 11,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+    paddingHorizontal: 2,
+  },
+  sportLabelSelected: {
+    fontFamily: "Poppins_600SemiBold",
+    color: COLORS.primary,
+  },
+  sportLevelBadge: {
+    position: "absolute",
+    top: 5,
+    left: 5,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 2,
+    paddingHorizontal: 5,
+    borderRadius: 5,
+    zIndex: 10,
+  },
+  sportLevelBadgeText: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 7,
+    color: COLORS.surface,
+  },
+  // Sports Modal Styles
+  sportModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  sportModalContent: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: 40,
+    paddingTop: SPACING.sm,
+    ...SHADOWS.medium,
+  },
+  sportModalHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: "#E4ECFA",
+    borderRadius: 2.5,
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 15,
+  },
+  sportModalTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 18,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
+  sportModalSubtitle: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    marginBottom: 20,
+    marginTop: 4,
+  },
+  sportLevelBtn: {
+    backgroundColor: "#F4F7FD",
+    borderWidth: 1,
+    borderColor: "#E4ECFA",
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  sportLevelBtnActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  sportLevelBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+  sportLevelBtnTextActive: {
     color: COLORS.surface,
   },
 });

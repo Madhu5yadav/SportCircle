@@ -54,6 +54,44 @@ try:
             print("Migration: Added offer_details column to venues table.")
         except Exception:
             pass
+
+        # Add level to preferred_sports if not exists
+        try:
+            conn.execute(text("ALTER TABLE preferred_sports ADD COLUMN level VARCHAR(20) DEFAULT 'Beginner';"))
+            conn.commit()
+            print("Migration: Added level column to preferred_sports table.")
+        except Exception:
+            pass
+
+        # Add trust_score and ratings_count to users table if not exists
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN trust_score FLOAT DEFAULT 0.0;"))
+            conn.commit()
+            print("Migration: Added trust_score column to users table.")
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN ratings_count INT DEFAULT 0;"))
+            conn.commit()
+            print("Migration: Added ratings_count column to users table.")
+        except Exception:
+            pass
+
+        # Add status to squad_members table if not exists
+        try:
+            conn.execute(text("ALTER TABLE squad_members ADD COLUMN status VARCHAR(20) DEFAULT 'pending';"))
+            conn.commit()
+            print("Migration: Added status column to squad_members table.")
+        except Exception:
+            pass
+
+        # Add status to participants table if not exists
+        try:
+            conn.execute(text("ALTER TABLE participants ADD COLUMN status VARCHAR(20) DEFAULT 'joined';"))
+            conn.commit()
+            print("Migration: Added status column to participants table.")
+        except Exception:
+            pass
 except Exception as e:
     print("Error synchronizing database tables, please verify MySQL connectivity:", e)
 

@@ -69,6 +69,97 @@ export default function ExploreScreen() {
   const [playerSearchResults, setPlayerSearchResults] = useState<any[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState(false);
 
+  const [selectedGame, setSelectedGame] = useState<any | null>(null);
+  const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
+
+  // Edit game states
+  const [isEditingGame, setIsEditingGame] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editPlayerCount, setEditPlayerCount] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editEquipment, setEditEquipment] = useState("");
+  const [editAccess, setEditAccess] = useState("public");
+  const [editGender, setEditGender] = useState("all");
+
+  const startEditingGame = () => {
+    if (!selectedGame) return;
+    setEditName(selectedGame.name);
+    setEditLocation(selectedGame.location);
+    setEditPlayerCount(selectedGame.player_count.toString());
+    setEditDescription(selectedGame.description || "");
+    setEditEquipment(selectedGame.equipment_required || "");
+    setEditAccess(selectedGame.access);
+    setEditGender(selectedGame.gender);
+    setIsEditingGame(true);
+  };
+
+  const handleDeleteGame = (gameId: number) => {
+    Alert.alert(
+      "Cancel Match?",
+      "Are you sure you want to cancel and delete this game? This will notify participants and cannot be undone.",
+      [
+        { text: "Keep Match", style: "cancel" },
+        {
+          text: "Cancel Match",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.delete(`/game/${gameId}`);
+              Alert.alert("Match Cancelled", "The game has been successfully deleted.");
+              setShowGameDetailsModal(false);
+              loadGames();
+            } catch (err: any) {
+              const errM = err.response?.data?.detail || "Could not delete game.";
+              Alert.alert("Error", errM);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleSaveGameEdits = async () => {
+    if (!editName.trim() || !editLocation.trim() || !editPlayerCount.trim()) {
+      Alert.alert("Required Fields", "Please enter the game title, location, and player capacity.");
+      return;
+    }
+    const cap = parseInt(editPlayerCount);
+    if (isNaN(cap) || cap <= 1) {
+      Alert.alert("Invalid Capacity", "Capacity must be at least 2.");
+      return;
+    }
+    try {
+      const response = await api.put(`/game/${selectedGame.id}`, {
+        name: editName.trim(),
+        location: editLocation.trim(),
+        player_count: cap,
+        access: editAccess,
+        gender: editGender,
+        equipment_required: editEquipment.trim() || null,
+        description: editDescription.trim() || null
+      });
+      Alert.alert("Success", "Game details updated successfully!");
+      setSelectedGame(response.data);
+      setIsEditingGame(false);
+      loadGames();
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.detail || "Could not update game details.";
+      Alert.alert("Update Failed", errorMsg);
+    }
+  };
+
+  const getSportIcon = (sport: string) => {
+    switch (sport.toLowerCase()) {
+      case "football": return "soccer";
+      case "basketball": return "basketball";
+      case "badminton": return "badminton";
+      case "cricket": return "cricket";
+      case "volleyball": return "volleyball";
+      default: return "sports-club";
+    }
+  };
+
   // Generate 7 days from today
   const getDaysArray = () => {
     const days = [];
@@ -120,6 +211,18 @@ export default function ExploreScreen() {
     loadSuggestedPlayers();
   }, [maxDistance]);
 
+  useEffect(() => {
+    if (params.gameId && games.length > 0) {
+      const target = games.find((g) => g.id.toString() === params.gameId?.toString());
+      if (target) {
+        setSelectedGame(target);
+        setShowGameDetailsModal(true);
+        // Clear param to avoid re-triggering modal on other re-renders
+        router.setParams({ gameId: undefined });
+      }
+    }
+  }, [params.gameId, games]);
+
   // Handle players search input
   useEffect(() => {
     if (searchMode === "players" && searchQuery.trim().length > 0) {
@@ -147,9 +250,33 @@ export default function ExploreScreen() {
       if (isJoined) {
         await api.post(`/leave-game/${gameId}`);
         Alert.alert("Success", "You left the game.");
+        if (selectedGame && selectedGame.id === gameId) {
+          setSelectedGame({
+            ...selectedGame,
+            is_joined: false,
+            joined_count: Math.max(0, selectedGame.joined_count - 1),
+            participants: selectedGame.participants.filter((p: any) => p.user_id !== auth.user?.id)
+          });
+        }
       } else {
         await api.post(`/join-game/${gameId}`);
         Alert.alert("Joined!", "You have successfully joined the game.");
+        if (selectedGame && selectedGame.id === gameId) {
+          setSelectedGame({
+            ...selectedGame,
+            is_joined: true,
+            joined_count: selectedGame.joined_count + 1,
+            participants: [
+              ...selectedGame.participants,
+              {
+                user_id: auth.user?.id,
+                username: auth.user?.username,
+                profile_pic: auth.user?.profile_pic || null,
+                joined_at: new Date().toISOString()
+              }
+            ]
+          });
+        }
       }
       await loadGames();
     } catch (error: any) {
@@ -278,7 +405,7 @@ export default function ExploreScreen() {
                     onPress={() => router.push({ pathname: "/user-profile", params: { userId: uid } })}
                   >
                     <Image 
-                      source={{ uri: p.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150" }} 
+                      source={{ uri: p.profile_pic || "https://cdn-icons-png.flaticon.com/512/149/149071.png" }} 
                       style={styles.playerAvatar} 
                     />
                     <Text style={styles.playerName} numberOfLines={1}>{p.username}</Text>
@@ -356,7 +483,13 @@ export default function ExploreScreen() {
             const slotsLeft = game.player_count - game.joined_count;
             return (
               <View key={game.id} style={styles.gameCard}>
-                <View style={styles.gameCardLeft}>
+                <TouchableOpacity
+                  style={styles.gameCardLeft}
+                  onPress={() => {
+                    setSelectedGame(game);
+                    setShowGameDetailsModal(true);
+                  }}
+                >
                   {/* Sport & Slots */}
                   <View style={styles.gameTitleRow}>
                     <Text style={styles.gameSportText}>{game.sport_type}</Text>
@@ -375,7 +508,7 @@ export default function ExploreScreen() {
                     <Ionicons name="location" size={14} color={COLORS.textSecondary} />
                     <Text style={styles.gameVenueText} numberOfLines={1}>{game.location}</Text>
                   </View>
-                </View>
+                </TouchableOpacity>
 
                 {/* Join button on the right */}
                 <TouchableOpacity
@@ -507,6 +640,406 @@ export default function ExploreScreen() {
     );
   };
 
+  const renderEditGameForm = () => {
+    return (
+      <ScrollView showsVerticalScrollIndicator={false} style={{ width: "100%", paddingHorizontal: 5 }}>
+        <Text style={[styles.detailsSectionTitle, { marginTop: 10, marginBottom: 15 }]}>Edit Match Details</Text>
+        
+        {/* Title */}
+        <View style={styles.editInputWrapper}>
+          <Text style={styles.editLabel}>Game Title *</Text>
+          <TextInput
+            style={styles.editInput}
+            value={editName}
+            onChangeText={setEditName}
+            placeholder="Game Name"
+          />
+        </View>
+
+        {/* Location */}
+        <View style={styles.editInputWrapper}>
+          <Text style={styles.editLabel}>Court / Venue Location Address *</Text>
+          <TextInput
+            style={styles.editInput}
+            value={editLocation}
+            onChangeText={setEditLocation}
+            placeholder="Venue Location"
+          />
+        </View>
+
+        {/* Player Count */}
+        <View style={styles.editInputWrapper}>
+          <Text style={styles.editLabel}>Player Capacity *</Text>
+          <TextInput
+            style={styles.editInput}
+            value={editPlayerCount}
+            onChangeText={setEditPlayerCount}
+            keyboardType="numeric"
+            placeholder="e.g. 10"
+          />
+        </View>
+
+        {/* Access visibility */}
+        <View style={styles.editInputWrapper}>
+          <Text style={styles.editLabel}>Visibility</Text>
+          <View style={styles.editRadioContainer}>
+            <TouchableOpacity 
+              style={[styles.editRadioBtn, editAccess === "public" ? styles.editRadioActive : null]}
+              onPress={() => setEditAccess("public")}
+            >
+              <Text style={[styles.editRadioText, editAccess === "public" ? styles.editRadioActiveText : null]}>Public</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.editRadioBtn, editAccess === "private" ? styles.editRadioActive : null]}
+              onPress={() => setEditAccess("private")}
+            >
+              <Text style={[styles.editRadioText, editAccess === "private" ? styles.editRadioActiveText : null]}>Private</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Gender Restriction */}
+        <View style={styles.editInputWrapper}>
+          <Text style={styles.editLabel}>Gender Restriction</Text>
+          <View style={styles.editRadioContainer}>
+            {["all", "male", "female"].map((g) => (
+              <TouchableOpacity 
+                key={g}
+                style={[styles.editRadioBtn, editGender === g ? styles.editRadioActive : null]}
+                onPress={() => setEditGender(g)}
+              >
+                <Text style={[styles.editRadioText, editGender === g ? styles.editRadioActiveText : null]}>
+                  {g.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Equipment */}
+        <View style={styles.editInputWrapper}>
+          <Text style={styles.editLabel}>Gear / Equipment Required</Text>
+          <TextInput
+            style={styles.editInput}
+            value={editEquipment}
+            onChangeText={setEditEquipment}
+            placeholder="e.g. Bats, gloves"
+          />
+        </View>
+
+        {/* Description */}
+        <View style={styles.editInputWrapper}>
+          <Text style={styles.editLabel}>About this Game</Text>
+          <TextInput
+            style={[styles.editInput, { height: 80, textAlignVertical: "top" }]}
+            value={editDescription}
+            onChangeText={setEditDescription}
+            multiline
+            placeholder="Add game notes, guidelines, skill level..."
+          />
+        </View>
+
+        {/* Save & Cancel Actions */}
+        <View style={styles.editActionsRow}>
+          <TouchableOpacity 
+            style={[styles.editBtn, styles.editCancelBtn]} 
+            onPress={() => setIsEditingGame(false)}
+          >
+            <Text style={styles.editCancelBtnText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.editBtn, styles.editSaveBtn]} 
+            onPress={handleSaveGameEdits}
+          >
+            <Text style={styles.editSaveBtnText}>Save Changes</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    );
+  };
+
+  const renderGameDetailsModal = () => {
+    return (
+      <Modal
+        visible={showGameDetailsModal && selectedGame !== null}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowGameDetailsModal(false);
+          setIsEditingGame(false);
+        }}
+      >
+        <TouchableOpacity 
+          style={styles.detailsModalBackdrop} 
+          activeOpacity={1} 
+          onPress={() => {
+            setShowGameDetailsModal(false);
+            setIsEditingGame(false);
+          }}
+        >
+          <View style={styles.detailsModalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalDragHandle} />
+            
+            {selectedGame && (
+              <>
+                {/* Header */}
+                <View style={styles.detailsHeader}>
+                  <View style={styles.detailsTitleContainer}>
+                    <MaterialCommunityIcons 
+                      name={getSportIcon(selectedGame.sport_type) as any} 
+                      size={28} 
+                      color={COLORS.primary} 
+                      style={{ marginRight: 10 }}
+                    />
+                    <View>
+                      <Text style={styles.detailsGameName}>{selectedGame.name}</Text>
+                      <Text style={styles.detailsSportType}>{selectedGame.sport_type}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    {selectedGame.host_id === auth.user?.id && !isEditingGame && (
+                      <>
+                        <TouchableOpacity 
+                          onPress={startEditingGame}
+                          style={{ marginRight: 15 }}
+                        >
+                          <Ionicons name="create-outline" size={24} color={COLORS.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          onPress={() => handleDeleteGame(selectedGame.id)}
+                          style={{ marginRight: 15 }}
+                        >
+                          <Ionicons name="trash-outline" size={24} color={COLORS.error} />
+                        </TouchableOpacity>
+                      </>
+                    )}
+                    <TouchableOpacity onPress={() => {
+                      setShowGameDetailsModal(false);
+                      setIsEditingGame(false);
+                    }}>
+                      <Ionicons name="close-circle" size={28} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {isEditingGame ? (
+                  renderEditGameForm()
+                ) : (
+                  <>
+                    <ScrollView 
+                      showsVerticalScrollIndicator={false} 
+                      contentContainerStyle={styles.detailsScrollContent}
+                    >
+                      {/* Host Info Row */}
+                      <View style={styles.detailsHostRow}>
+                        <Image 
+                          source={{ uri: selectedGame.host_profile_pic || "https://cdn-icons-png.flaticon.com/512/149/149071.png" }}
+                          style={styles.detailsHostAvatar}
+                        />
+                        <View>
+                          <Text style={styles.detailsHostLabel}>Hosted by</Text>
+                          <Text style={styles.detailsHostName}>@{selectedGame.host_username}</Text>
+                        </View>
+                      </View>
+
+                      {/* Date & Time block */}
+                      <View style={styles.detailsInfoCard}>
+                        <View style={styles.detailsInfoItem}>
+                          <Ionicons name="calendar-outline" size={20} color={COLORS.primary} style={{ marginRight: 12 }} />
+                          <Text style={styles.detailsInfoText}>{selectedGame.game_date}</Text>
+                        </View>
+                        <View style={[styles.detailsInfoItem, { marginTop: 10 }]}>
+                          <Ionicons name="time-outline" size={20} color={COLORS.primary} style={{ marginRight: 12 }} />
+                          <Text style={styles.detailsInfoText}>
+                            {selectedGame.start_time.slice(0, 5)} - {selectedGame.end_time.slice(0, 5)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Location block */}
+                      <View style={styles.detailsInfoCard}>
+                        <View style={styles.detailsInfoItem}>
+                          <Ionicons name="location-outline" size={20} color={COLORS.primary} style={{ marginRight: 12 }} />
+                          <Text style={styles.detailsInfoText} numberOfLines={3}>{selectedGame.location}</Text>
+                        </View>
+                      </View>
+
+                      {/* Details Grid */}
+                      <View style={styles.detailsGrid}>
+                        <View style={styles.detailsGridItem}>
+                          <Ionicons name="shield-checkmark-outline" size={18} color={COLORS.textSecondary} style={{ marginBottom: 4 }} />
+                          <Text style={styles.gridLabel}>Visibility</Text>
+                          <Text style={styles.gridValue}>{selectedGame.access}</Text>
+                        </View>
+                        <View style={styles.detailsGridItem}>
+                          <Ionicons name="cash-outline" size={18} color={COLORS.textSecondary} style={{ marginBottom: 4 }} />
+                          <Text style={styles.gridLabel}>Entry Pricing</Text>
+                          <Text style={styles.gridValue}>
+                            {parseFloat(selectedGame.entry_fee) === 0 ? "Free" : `Rs. ${selectedGame.entry_fee}`}
+                          </Text>
+                        </View>
+                        <View style={styles.detailsGridItem}>
+                          <Ionicons name="transgender-outline" size={18} color={COLORS.textSecondary} style={{ marginBottom: 4 }} />
+                          <Text style={styles.gridLabel}>Gender</Text>
+                          <Text style={styles.gridValue}>{selectedGame.gender}</Text>
+                        </View>
+                        <View style={styles.detailsGridItem}>
+                          <Ionicons name="construct-outline" size={18} color={COLORS.textSecondary} style={{ marginBottom: 4 }} />
+                          <Text style={styles.gridLabel}>Equipment</Text>
+                          <Text style={styles.gridValue} numberOfLines={1}>
+                            {selectedGame.equipment_required || "None"}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Description */}
+                      {selectedGame.description ? (
+                        <View style={styles.detailsDescriptionCard}>
+                          <Text style={styles.detailsSectionTitle}>About this Game</Text>
+                          <Text style={styles.detailsDescriptionText}>{selectedGame.description}</Text>
+                        </View>
+                      ) : null}
+
+                      {/* Participants List */}
+                      {(() => {
+                        const joinedParts = (selectedGame.participants || []).filter((p: any) => p.status !== "waiting");
+                        const waitingParts = (selectedGame.participants || []).filter((p: any) => p.status === "waiting");
+                        
+                        return (
+                          <>
+                            <View style={styles.detailsParticipantsSection}>
+                              <Text style={styles.detailsSectionTitle}>
+                                Participants ({joinedParts.length}/{selectedGame.player_count})
+                              </Text>
+                              
+                              {joinedParts.length > 0 ? (
+                                <ScrollView 
+                                  horizontal 
+                                  showsHorizontalScrollIndicator={false}
+                                  contentContainerStyle={styles.detailsPartsScroll}
+                                >
+                                  {joinedParts.map((p: any) => (
+                                    <View key={p.user_id} style={styles.detailsPartCard}>
+                                      <Image 
+                                        source={{ uri: p.profile_pic || "https://cdn-icons-png.flaticon.com/512/149/149071.png" }}
+                                        style={styles.detailsPartAvatar}
+                                      />
+                                      <Text style={styles.detailsPartName} numberOfLines={1}>
+                                        {p.username}
+                                      </Text>
+                                    </View>
+                                  ))}
+                                </ScrollView>
+                              ) : (
+                                <Text style={styles.noPartsText}>No participants have joined yet.</Text>
+                              )}
+                            </View>
+
+                            {waitingParts.length > 0 && (
+                              <View style={[styles.detailsParticipantsSection, { marginTop: 15 }]}>
+                                <Text style={[styles.detailsSectionTitle, { color: "#FB8C00" }]}>
+                                  Waiting List ({waitingParts.length})
+                                </Text>
+                                
+                                <ScrollView 
+                                  horizontal 
+                                  showsHorizontalScrollIndicator={false}
+                                  contentContainerStyle={styles.detailsPartsScroll}
+                                >
+                                  {waitingParts.map((p: any) => (
+                                    <View key={p.user_id} style={styles.detailsPartCard}>
+                                      <View style={{ position: "relative" }}>
+                                        <Image 
+                                          source={{ uri: p.profile_pic || "https://cdn-icons-png.flaticon.com/512/149/149071.png" }}
+                                          style={[styles.detailsPartAvatar, { borderColor: "#FFB74D", borderWidth: 1.5 }]}
+                                        />
+                                        <View style={{
+                                          position: "absolute",
+                                          bottom: 4,
+                                          right: 0,
+                                          backgroundColor: "#FB8C00",
+                                          paddingHorizontal: 4,
+                                          paddingVertical: 1,
+                                          borderRadius: 4,
+                                        }}>
+                                          <Text style={{ fontSize: 7, color: COLORS.surface, fontFamily: "Poppins_700Bold" }}>WAIT</Text>
+                                        </View>
+                                      </View>
+                                      <Text style={styles.detailsPartName} numberOfLines={1}>
+                                        {p.username}
+                                      </Text>
+                                    </View>
+                                  ))}
+                                </ScrollView>
+                              </View>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </ScrollView>
+
+                    {/* Join / Leave Footer Button */}
+                    {(() => {
+                      const userPart = (selectedGame.participants || []).find((p: any) => p.user_id === auth.user?.id);
+                      const isWaiting = userPart && userPart.status === "waiting";
+                      const isFull = selectedGame.joined_count >= selectedGame.player_count;
+                      
+                      let btnText = "Join Game";
+                      let btnStyle: any = styles.detailsJoinBtn;
+                      let textStyle: any = null;
+                      
+                      if (selectedGame.is_joined) {
+                        if (isWaiting) {
+                          btnText = "Leave Waiting List";
+                          btnStyle = styles.detailsLeaveBtn;
+                          textStyle = { color: COLORS.error };
+                        } else {
+                          btnText = "Leave Game";
+                          btnStyle = styles.detailsLeaveBtn;
+                          textStyle = { color: COLORS.error };
+                        }
+                      } else {
+                        if (isFull) {
+                          btnText = "Join Waiting List";
+                          btnStyle = [styles.detailsJoinBtn, { backgroundColor: "#FF9800" }];
+                        } else {
+                          btnText = "Join Game";
+                          btnStyle = styles.detailsJoinBtn;
+                        }
+                      }
+                      
+                      return (
+                        <View style={styles.detailsFooter}>
+                          <TouchableOpacity
+                            style={[
+                              styles.detailsActionBtn,
+                              btnStyle,
+                              actionLoading === selectedGame.id ? styles.detailsBtnDisabled : null
+                            ]}
+                            onPress={() => handleJoinLeaveGame(selectedGame.id, !!selectedGame.is_joined)}
+                            disabled={actionLoading === selectedGame.id}
+                          >
+                            {actionLoading === selectedGame.id ? (
+                              <ActivityIndicator color={COLORS.surface} />
+                            ) : (
+                              <Text style={[styles.detailsActionBtnText, textStyle]}>
+                                {btnText}
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })()}
+                  </>
+                )}
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -515,6 +1048,7 @@ export default function ExploreScreen() {
         {renderFindGamesSection()}
       </ScrollView>
       {renderFilterModal()}
+      {renderGameDetailsModal()}
     </View>
   );
 }
@@ -855,5 +1389,270 @@ const styles = StyleSheet.create({
   modalOptionTextActive: {
     color: COLORS.primary,
     fontFamily: "Poppins_600SemiBold",
+  },
+  detailsModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  detailsModalContent: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: 24,
+    paddingTop: SPACING.sm,
+    height: "85%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  detailsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E4ECFA",
+  },
+  detailsTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  detailsGameName: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 18,
+    color: COLORS.textPrimary,
+  },
+  detailsSportType: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: -2,
+  },
+  detailsScrollContent: {
+    paddingVertical: 20,
+    gap: 16,
+  },
+  detailsHostRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  detailsHostAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  detailsHostLabel: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  detailsHostName: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginTop: -2,
+  },
+  detailsInfoCard: {
+    backgroundColor: "#F4F7FD",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E4ECFA",
+  },
+  detailsInfoItem: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  detailsInfoText: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    flex: 1,
+  },
+  detailsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  detailsGridItem: {
+    backgroundColor: "#F4F7FD",
+    borderWidth: 1,
+    borderColor: "#E4ECFA",
+    borderRadius: 16,
+    padding: 12,
+    width: "48%",
+    alignItems: "center",
+  },
+  gridLabel: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 10,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  gridValue: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: COLORS.textPrimary,
+    marginTop: 2,
+    textTransform: "capitalize",
+  },
+  detailsDescriptionCard: {
+    backgroundColor: "#F4F7FD",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E4ECFA",
+  },
+  detailsSectionTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+  },
+  detailsDescriptionText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    lineHeight: 18,
+  },
+  detailsParticipantsSection: {
+    marginTop: 8,
+  },
+  detailsPartsScroll: {
+    gap: 12,
+    paddingVertical: 8,
+  },
+  detailsPartCard: {
+    alignItems: "center",
+    width: 60,
+  },
+  detailsPartAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginBottom: 6,
+  },
+  detailsPartName: {
+    fontFamily: "Poppins_500Medium",
+    fontSize: 11,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
+  noPartsText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    fontStyle: "italic",
+  },
+  detailsFooter: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E4ECFA",
+    backgroundColor: COLORS.surface,
+  },
+  detailsActionBtn: {
+    height: 50,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  detailsJoinBtn: {
+    backgroundColor: COLORS.primary,
+  },
+  detailsLeaveBtn: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.error,
+  },
+  detailsBtnDisabled: {
+    backgroundColor: COLORS.border,
+  },
+  detailsActionBtnText: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 15,
+    color: COLORS.surface,
+  },
+  editInputWrapper: {
+    marginBottom: 15,
+  },
+  editLabel: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: COLORS.textPrimary,
+    marginBottom: 6,
+  },
+  editInput: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: COLORS.textPrimary,
+    borderWidth: 1.5,
+    borderColor: "#E4ECFA",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 46,
+    backgroundColor: "#F8FAFD",
+  },
+  editRadioContainer: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  editRadioBtn: {
+    flex: 1,
+    height: 40,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#E4ECFA",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F8FAFD",
+  },
+  editRadioActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  editRadioText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  editRadioActiveText: {
+    color: COLORS.surface,
+  },
+  editActionsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 20,
+    marginBottom: 30,
+    gap: 12,
+  },
+  editBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  editCancelBtn: {
+    backgroundColor: "#F4F7FD",
+    borderWidth: 1,
+    borderColor: "#E4ECFA",
+  },
+  editCancelBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  editSaveBtn: {
+    backgroundColor: COLORS.primary,
+  },
+  editSaveBtnText: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 13,
+    color: COLORS.surface,
   },
 });

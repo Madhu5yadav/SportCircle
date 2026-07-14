@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   RefreshControl,
   StyleSheet,
@@ -127,6 +128,7 @@ export default function NotificationsScreen() {
   const unreadCount = useSelector(
     (state: RootState) => state.notification.unreadCount
   );
+  const auth = useSelector((state: RootState) => state.auth);
 
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -253,8 +255,79 @@ export default function NotificationsScreen() {
     }
 
     const notif = item.item;
+    const isSquadInvite = notif.type === "squad_invite";
     const iconName = getNotificationIcon(notif.type);
     const iconColor = getIconColor(notif.type);
+
+    // Extract squad_id and clean message if squad_invite
+    let cleanMessage = notif.message;
+    let squadId: number | null = null;
+    if (isSquadInvite) {
+      const squadIdMatch = notif.message.match(/\[squad_id:(\d+)\]/);
+      squadId = squadIdMatch ? parseInt(squadIdMatch[1]) : null;
+      cleanMessage = notif.message.replace(/\s*\[squad_id:\d+\]/, "");
+    }
+
+    const handleRespond = async (action: "accept" | "reject") => {
+      if (!squadId) return;
+      try {
+        if (action === "accept") {
+          // Check if user is already in a squad
+          const squadsRes = await api.get("/squads");
+          const acceptedSquad = (squadsRes.data || []).find((sq: any) => {
+            const selfMember = sq.members.find((m: any) => m.user_id === auth.user?.id);
+            return selfMember && selfMember.status === "accepted";
+          });
+
+          if (acceptedSquad) {
+            // User is already in an active squad! Show Alert with leave button!
+            Alert.alert(
+              "Switch Squad?",
+              `You are already a member of '${acceptedSquad.name}'. Leave '${acceptedSquad.name}' and join this squad?`,
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Leave & Join",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      // 1. Leave previous squad
+                      await api.delete(`/leave-squad/${acceptedSquad.id}`);
+                      // 2. Accept new squad
+                      await api.post(`/squads/invitation/${squadId}/respond`, { action: "accept" });
+                      Alert.alert("Success", "Left previous squad and joined the new squad!");
+                      // 3. Remove notification completely
+                      await api.delete(`/notification/${notif.id}`);
+                      dispatch(deleteNotification(notif.id));
+                      onRefresh();
+                      router.push("/friends");
+                    } catch (e) {
+                      Alert.alert("Error", "Could not switch squads.");
+                    }
+                  }
+                }
+              ]
+            );
+            return;
+          }
+        }
+
+        // Direct action
+        await api.post(`/squads/invitation/${squadId}/respond`, { action });
+        Alert.alert("Success", `Squad invitation ${action}ed!`);
+
+        // Remove notification completely from database & redux
+        await api.delete(`/notification/${notif.id}`);
+        dispatch(deleteNotification(notif.id));
+        onRefresh();
+
+        if (action === "accept") {
+          router.push("/friends");
+        }
+      } catch (err) {
+        Alert.alert("Error", "Could not respond to invitation.");
+      }
+    };
 
     return (
       <Swipeable
@@ -265,6 +338,7 @@ export default function NotificationsScreen() {
           style={[
             styles.notifCard,
             !notif.is_read && styles.notifCardUnread,
+            isSquadInvite && { alignItems: "flex-start" }
           ]}
           onPress={() => handleNotificationPress(notif)}
           activeOpacity={0.7}
@@ -279,9 +353,27 @@ export default function NotificationsScreen() {
             <Text style={styles.notifTitle} numberOfLines={2}>
               {notif.title}
             </Text>
-            <Text style={styles.notifMessage} numberOfLines={2}>
-              {notif.message}
+            <Text style={styles.notifMessage} numberOfLines={3}>
+              {cleanMessage}
             </Text>
+            
+            {isSquadInvite && squadId && (
+              <View style={styles.notifActionsRow}>
+                <TouchableOpacity
+                  style={[styles.smallBtn, styles.acceptBtn]}
+                  onPress={() => handleRespond("accept")}
+                >
+                  <Text style={styles.acceptBtnText}>Accept</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.smallBtn, styles.rejectBtn]}
+                  onPress={() => handleRespond("reject")}
+                >
+                  <Text style={styles.rejectBtnText}>Reject</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <Text style={styles.notifTime}>
               {formatTimeAgo(notif.created_at)}
             </Text>
@@ -535,5 +627,37 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: "center",
     lineHeight: 22,
+  },
+  notifActionsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  smallBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 70,
+  },
+  acceptBtn: {
+    backgroundColor: COLORS.primary,
+  },
+  acceptBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: COLORS.surface,
+  },
+  rejectBtn: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.error,
+  },
+  rejectBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 11,
+    color: COLORS.error,
   },
 });

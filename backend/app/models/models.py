@@ -19,6 +19,8 @@ class User(Base):
     about = Column(Text, default=None)
     profile_pic = Column(Text, default=None)
     role = Column(String(20), default="player")
+    trust_score = Column(Float, default=0.0)
+    ratings_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -47,6 +49,7 @@ class PreferredSport(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     sport_name = Column(String(50), nullable=False)
+    level = Column(String(20), default="Beginner")
 
     user = relationship("User", back_populates="preferred_sports")
 
@@ -79,6 +82,7 @@ class SquadMember(Base):
     squad_id = Column(Integer, ForeignKey("squads.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     role = Column(String(20), default="member")  # leader, member
+    status = Column(String(20), default="pending")  # pending, accepted, rejected
     joined_at = Column(DateTime, default=datetime.utcnow)
 
     squad = relationship("Squad", back_populates="members")
@@ -117,6 +121,7 @@ class Participant(Base):
     id = Column(Integer, primary_key=True, index=True)
     game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(20), default="joined")  # joined, waiting
     joined_at = Column(DateTime, default=datetime.utcnow)
 
     game = relationship("Game", back_populates="participants")

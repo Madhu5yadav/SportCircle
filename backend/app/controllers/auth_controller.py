@@ -242,17 +242,11 @@ def save_personal_details(
     if details.profile_pic is not None:
         current_user.profile_pic = details.profile_pic
     
-    # Store preferred playing time in about column as JSON or serialise it
-    # We will use about/custom columns. Let's serialize playing times into user settings or about text
-    # In order to store preferred playing times cleanly:
-    # Let's save it to settings under a JSON or serialise. Since settings is a single table,
-    # we can serialize playing times or save in user.about or settings push_enabled etc.
-    # Actually, we can serialize it inside user's "about" field if we want, or make a JSON representation.
-    # Let's write playing time in settings by mapping settings columns, or serialize inside about field
-    # (e.g. "Playing Time: Morning, Evening").
-    # Let's put a custom property or serialized string in user.about or let's store it as serialized JSON in users table about column.
     playing_time_str = ",".join(details.playing_time)
-    current_user.about = f"Playing: {playing_time_str}"
+    about_val = f"Playing: {playing_time_str}"
+    if details.about:
+        about_val += f"\n\n{details.about}"
+    current_user.about = about_val
     
     db.commit()
     return {"message": "Personal details saved successfully."}
@@ -268,8 +262,9 @@ def save_preferred_sports(
     db.query(PreferredSport).filter(PreferredSport.user_id == current_user.id).delete()
     
     # 2. Add new sports
-    for sport in sports_in.sports:
-        pref_sport = PreferredSport(user_id=current_user.id, sport_name=sport)
+    for i, sport in enumerate(sports_in.sports):
+        level = sports_in.levels[i] if (sports_in.levels and i < len(sports_in.levels)) else "Beginner"
+        pref_sport = PreferredSport(user_id=current_user.id, sport_name=sport, level=level)
         db.add(pref_sport)
         
     db.commit()

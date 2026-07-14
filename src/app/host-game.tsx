@@ -15,6 +15,7 @@ import {
 import { useRouter } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from "../theme/theme";
 import api from "../services/api";
 import { addGame } from "../redux/gameSlice";
@@ -25,6 +26,7 @@ const GENDERS = ["All", "Male", "Female"];
 export default function HostGameScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
+  const auth = useSelector((state: RootState) => state.auth);
 
   // Form States
   const [name, setName] = useState("");
@@ -42,6 +44,77 @@ export default function HostGameScreen() {
   const [description, setDescription] = useState("");
   
   const [loading, setLoading] = useState(false);
+
+  // Squad Integration States
+  const [squads, setSquads] = useState<any[]>([]);
+  const [selectedSquadId, setSelectedSquadId] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    const loadUserSquads = async () => {
+      try {
+        const res = await api.get("/squads");
+        const ownedSquads = (res.data || []).filter((sq: any) => sq.created_by === auth.user?.id);
+        setSquads(ownedSquads);
+      } catch (err) {
+        console.log("Error loading squads in host-game:", err);
+      }
+    };
+    loadUserSquads();
+  }, [auth.user]);
+
+  // Date and Time Picker States
+  const [gameDateObj, setGameDateObj] = useState<Date>(new Date());
+  const [startTimeObj, setStartTimeObj] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(17, 0, 0, 0);
+    return d;
+  });
+  const [endTimeObj, setEndTimeObj] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(19, 0, 0, 0);
+    return d;
+  });
+  
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+
+  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+    }
+    if (selectedDate) {
+      setGameDateObj(selectedDate);
+      const yyyy = selectedDate.getFullYear();
+      const mm = String(selectedDate.getMonth() + 1).padStart(2, "0");
+      const dd = String(selectedDate.getDate()).padStart(2, "0");
+      setGameDate(`${yyyy}-${mm}-${dd}`);
+    }
+  };
+
+  const handleStartTimeChange = (event: DateTimePickerEvent, selectedTime?: Date) => {
+    if (Platform.OS === "android") {
+      setShowStartTimePicker(false);
+    }
+    if (selectedTime) {
+      setStartTimeObj(selectedTime);
+      const hh = String(selectedTime.getHours()).padStart(2, "0");
+      const min = String(selectedTime.getMinutes()).padStart(2, "0");
+      setStartTime(`${hh}:${min}`);
+    }
+  };
+
+  const handleEndTimeChange = (event: DateTimePickerEvent, selectedTime?: Date) => {
+    if (Platform.OS === "android") {
+      setShowEndTimePicker(false);
+    }
+    if (selectedTime) {
+      setEndTimeObj(selectedTime);
+      const hh = String(selectedTime.getHours()).padStart(2, "0");
+      const min = String(selectedTime.getMinutes()).padStart(2, "0");
+      setEndTime(`${hh}:${min}`);
+    }
+  };
 
   const handleSubmit = async () => {
     // Validations
@@ -93,7 +166,8 @@ export default function HostGameScreen() {
         entry_fee: feeVal,
         gender,
         equipment_required: equipment.trim() || null,
-        description: description.trim() || null
+        description: description.trim() || null,
+        squad_id: selectedSquadId
       });
 
       dispatch(addGame(response.data));
@@ -154,7 +228,7 @@ export default function HostGameScreen() {
             <Text style={styles.label}>Court/Ground Location Address *</Text>
             <View style={styles.inputWithIcon}>
               <TextInput
-                style={[styles.input, { flex: 1, borderWidth: 0, paddingLeft: 0 }]}
+                style={styles.textInputWithIcon}
                 placeholder="e.g. Sarjapur HSR Sports Court"
                 value={location}
                 onChangeText={setLocation}
@@ -163,49 +237,122 @@ export default function HostGameScreen() {
             </View>
           </View>
 
-          {/* Date & Time */}
+          {/* Date Picker */}
+          <View style={styles.inputWrapper}>
+            <Text style={styles.label}>Date *</Text>
+            <TouchableOpacity
+              style={styles.datePickerField}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar-outline" size={20} color={gameDate ? COLORS.primary : COLORS.textSecondary} style={{ marginRight: 10 }} />
+              <Text style={[styles.datePickerText, !gameDate && styles.datePickerPlaceholder]}>
+                {gameDate
+                  ? gameDateObj.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+                  : "Select Date"}
+              </Text>
+              <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+            {showDatePicker && (
+              <View style={styles.datePickerContainer}>
+                <DateTimePicker
+                  value={gameDateObj}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  minimumDate={new Date()}
+                  onChange={handleDateChange}
+                />
+                {Platform.OS === "ios" && (
+                  <TouchableOpacity
+                    style={styles.datePickerDoneBtn}
+                    onPress={() => setShowDatePicker(false)}
+                  >
+                    <Text style={styles.datePickerDoneText}>Done</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
+
+          {/* Start Time & End Time in a straight line */}
           <View style={styles.row}>
             <View style={[styles.inputWrapper, { flex: 1, marginRight: SPACING.sm }]}>
-              <Text style={styles.label}>Date (YYYY-MM-DD) *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 2026-07-15"
-                value={gameDate}
-                onChangeText={setGameDate} // Bind date string helper
-                onChange={(e) => setGameDate(e.nativeEvent.text)}
-              />
+              <Text style={styles.label}>Start Time *</Text>
+              <TouchableOpacity
+                style={styles.datePickerField}
+                onPress={() => setShowStartTimePicker(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="time-outline" size={20} color={startTime ? COLORS.primary : COLORS.textSecondary} style={{ marginRight: 10 }} />
+                <Text style={[styles.datePickerText, !startTime && styles.datePickerPlaceholder]}>
+                  {startTime ? startTime : "Select Start"}
+                </Text>
+                <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              {showStartTimePicker && (
+                <View style={styles.datePickerContainer}>
+                  <DateTimePicker
+                    value={startTimeObj}
+                    mode="time"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    onChange={handleStartTimeChange}
+                  />
+                  {Platform.OS === "ios" && (
+                    <TouchableOpacity
+                      style={styles.datePickerDoneBtn}
+                      onPress={() => setShowStartTimePicker(false)}
+                    >
+                      <Text style={styles.datePickerDoneText}>Done</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </View>
+
             <View style={[styles.inputWrapper, { flex: 1, marginLeft: SPACING.sm }]}>
-              <Text style={styles.label}>Start Time (HH:MM) *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 17:00"
-                value={startTime}
-                onChangeText={setStartTime}
-              />
+              <Text style={styles.label}>End Time *</Text>
+              <TouchableOpacity
+                style={styles.datePickerField}
+                onPress={() => setShowEndTimePicker(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="time-outline" size={20} color={endTime ? COLORS.primary : COLORS.textSecondary} style={{ marginRight: 10 }} />
+                <Text style={[styles.datePickerText, !endTime && styles.datePickerPlaceholder]}>
+                  {endTime ? endTime : "Select End"}
+                </Text>
+                <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
+              </TouchableOpacity>
+              {showEndTimePicker && (
+                <View style={styles.datePickerContainer}>
+                  <DateTimePicker
+                    value={endTimeObj}
+                    mode="time"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    onChange={handleEndTimeChange}
+                  />
+                  {Platform.OS === "ios" && (
+                    <TouchableOpacity
+                      style={styles.datePickerDoneBtn}
+                      onPress={() => setShowEndTimePicker(false)}
+                    >
+                      <Text style={styles.datePickerDoneText}>Done</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </View>
           </View>
 
-          <View style={styles.row}>
-            <View style={[styles.inputWrapper, { flex: 1, marginRight: SPACING.sm }]}>
-              <Text style={styles.label}>End Time (HH:MM) *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 19:00"
-                value={endTime}
-                onChangeText={setEndTime}
-              />
-            </View>
-            <View style={[styles.inputWrapper, { flex: 1, marginLeft: SPACING.sm }]}>
-              <Text style={styles.label}>Player Capacity *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 12"
-                keyboardType="numeric"
-                value={playerCount}
-                onChangeText={setPlayerCount}
-              />
-            </View>
+          {/* Player Capacity */}
+          <View style={styles.inputWrapper}>
+            <Text style={styles.label}>Player Capacity *</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 12"
+              keyboardType="numeric"
+              value={playerCount}
+              onChangeText={setPlayerCount}
+            />
           </View>
 
           {/* Access Toggle */}
@@ -282,6 +429,37 @@ export default function HostGameScreen() {
             />
           </View>
 
+          {/* Squad selector */}
+          {squads.length > 0 && (
+            <View style={styles.inputWrapper}>
+              <Text style={styles.label}>Associate Squad (Auto-join accepted members)</Text>
+              <View style={styles.squadOptionsRow}>
+                <TouchableOpacity
+                  style={[styles.squadOptionCard, selectedSquadId === null ? styles.squadOptionSelected : null]}
+                  onPress={() => setSelectedSquadId(null)}
+                >
+                  <Text style={[styles.squadOptionText, selectedSquadId === null ? styles.squadOptionTextSelected : null]}>
+                    None
+                  </Text>
+                </TouchableOpacity>
+                {squads.map((sq) => {
+                  const isSelected = selectedSquadId === sq.id;
+                  return (
+                    <TouchableOpacity
+                      key={sq.id}
+                      style={[styles.squadOptionCard, isSelected ? styles.squadOptionSelected : null]}
+                      onPress={() => setSelectedSquadId(sq.id)}
+                    >
+                      <Text style={[styles.squadOptionText, isSelected ? styles.squadOptionTextSelected : null]}>
+                        {sq.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
           {/* Description */}
           <View style={styles.inputWrapper}>
             <Text style={styles.label}>Match Instructions / Description (Optional)</Text>
@@ -310,6 +488,33 @@ export default function HostGameScreen() {
 }
 
 const styles = StyleSheet.create({
+  squadOptionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.sm,
+    marginTop: 8,
+  },
+  squadOptionCard: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  squadOptionSelected: {
+    borderColor: COLORS.primary,
+    backgroundColor: "#F4F7FD",
+  },
+  squadOptionText: {
+    fontFamily: TYPOGRAPHY.fontFamily.medium,
+    fontSize: TYPOGRAPHY.sizes.sm,
+    color: COLORS.textSecondary,
+  },
+  squadOptionTextSelected: {
+    color: COLORS.primary,
+    fontFamily: TYPOGRAPHY.fontFamily.bold,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -362,6 +567,15 @@ const styles = StyleSheet.create({
     height: 52,
     ...SHADOWS.soft,
   },
+  textInputWithIcon: {
+    flex: 1,
+    height: "100%",
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    paddingVertical: 0,
+    paddingRight: SPACING.sm,
+  },
   row: {
     flexDirection: "row",
   },
@@ -407,7 +621,6 @@ const styles = StyleSheet.create({
   },
   radioBtnActive: {
     borderColor: COLORS.primary,
-    backgroundColor: COLORS.cardBackground + "20",
   },
   radioText: {
     fontFamily: "Poppins_500Medium",
@@ -462,5 +675,46 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 16,
     color: COLORS.surface,
+  },
+  datePickerField: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.border,
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingHorizontal: SPACING.md,
+    height: 52,
+    ...SHADOWS.soft,
+  },
+  datePickerText: {
+    flex: 1,
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+  },
+  datePickerPlaceholder: {
+    color: COLORS.textSecondary,
+  },
+  datePickerContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    marginTop: 8,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    overflow: "hidden",
+    ...SHADOWS.soft,
+  },
+  datePickerDoneBtn: {
+    alignItems: "center",
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  datePickerDoneText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: COLORS.primary,
   },
 });

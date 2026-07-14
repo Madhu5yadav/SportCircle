@@ -106,7 +106,7 @@ export default function SearchUsersScreen() {
           onPress={() => router.push({ pathname: "/user-profile", params: { userId: item.id } })}
         >
           <Image
-            source={{ uri: item.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150" }}
+            source={{ uri: item.profile_pic || "https://cdn-icons-png.flaticon.com/512/149/149071.png" }}
             style={styles.avatar}
           />
           <View style={styles.userDetails}>

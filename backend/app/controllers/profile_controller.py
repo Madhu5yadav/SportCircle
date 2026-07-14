@@ -10,7 +10,7 @@ from app.database.db import get_db
 from app.models.models import User, PreferredSport, Wallet, Settings, Friend
 from app.schemas.schemas import (
     ProfileResponse, ProfileUpdate, SettingsResponse, UserResponse, WalletResponse,
-    PublicProfileResponse, PublicProfileUserResponse
+    PublicProfileResponse, PublicProfileUserResponse, RateUserRequest
 )
 from app.middleware.auth import get_current_user
 
@@ -24,6 +24,7 @@ def get_profile(
     # Fetch Preferred Sports
     pref_sports = db.query(PreferredSport).filter(PreferredSport.user_id == current_user.id).all()
     sports_list = [s.sport_name for s in pref_sports]
+    sports_details_list = [{"name": s.sport_name, "level": s.level or "Beginner"} for s in pref_sports]
     
     # Fetch Wallet
     wallet = db.query(Wallet).filter(Wallet.user_id == current_user.id).first()
@@ -43,9 +44,12 @@ def get_profile(
 
     # Extract playing times from user about column if formatted as: "Playing: Morning,Evening"
     playing_time_list = []
+    bio_text = current_user.about
     if current_user.about and current_user.about.startswith("Playing:"):
-        times_str = current_user.about.split("Playing:")[1]
+        parts = current_user.about.split("\n\n", 1)
+        times_str = parts[0].split("Playing:")[1]
         playing_time_list = [t.strip() for t in times_str.split(",") if t.strip()]
+        bio_text = parts[1] if len(parts) > 1 else ""
 
     user_res = UserResponse(
         id=current_user.id,
@@ -57,14 +61,17 @@ def get_profile(
         gender=current_user.gender,
         latitude=current_user.latitude,
         longitude=current_user.longitude,
-        about=current_user.about,
+        about=bio_text,
         profile_pic=current_user.profile_pic,
+        trust_score=current_user.trust_score or 0.0,
+        ratings_count=current_user.ratings_count or 0,
         created_at=current_user.created_at
     )
 
     return ProfileResponse(
         user=user_res,
         preferred_sports=sports_list,
+        preferred_sports_details=sports_details_list,
         playing_time=playing_time_list,
         wallet=WalletResponse(balance=wallet.balance),
         settings=SettingsResponse(
@@ -89,22 +96,46 @@ def update_profile(
         current_user.dob = profile_in.dob
     if profile_in.gender is not None:
         current_user.gender = profile_in.gender
+    # Extract existing bio and playing times to update them separately
+    current_bio = ""
+    current_playing = ""
+    if current_user.about and current_user.about.startswith("Playing:"):
+        parts = current_user.about.split("\n\n", 1)
+        current_playing = parts[0]
+        current_bio = parts[1] if len(parts) > 1 else ""
+    elif current_user.about:
+        current_bio = current_user.about
+
     if profile_in.about is not None:
-        current_user.about = profile_in.about
+        current_bio = profile_in.about
+        
+    if profile_in.playing_time is not None:
+        playing_str = ",".join(profile_in.playing_time)
+        current_playing = f"Playing: {playing_str}"
+        
+    # Reassemble about value
+    about_val = ""
+    if current_playing:
+        about_val = current_playing
+        
+    if current_bio:
+        if about_val:
+            about_val += f"\n\n{current_bio}"
+        else:
+            about_val = current_bio
+            
+    current_user.about = about_val if about_val else None
+
     if profile_in.profile_pic is not None:
         current_user.profile_pic = profile_in.profile_pic
         
     # Update preferred sports if provided
     if profile_in.sports is not None:
         db.query(PreferredSport).filter(PreferredSport.user_id == current_user.id).delete()
-        for sport in profile_in.sports:
-            pref_sport = PreferredSport(user_id=current_user.id, sport_name=sport)
+        for i, sport in enumerate(profile_in.sports):
+            level = profile_in.sports_levels[i] if (profile_in.sports_levels and i < len(profile_in.sports_levels)) else "Beginner"
+            pref_sport = PreferredSport(user_id=current_user.id, sport_name=sport, level=level)
             db.add(pref_sport)
-
-    # Update preferred playing time in about description if provided
-    if profile_in.playing_time is not None:
-        playing_str = ",".join(profile_in.playing_time)
-        current_user.about = f"Playing: {playing_str}"
 
     db.commit()
     return {"message": "Profile updated successfully"}
@@ -180,12 +211,16 @@ def get_public_profile(
     # Fetch Preferred Sports
     pref_sports = db.query(PreferredSport).filter(PreferredSport.user_id == user_id).all()
     sports_list = [s.sport_name for s in pref_sports]
+    sports_details_list = [{"name": s.sport_name, "level": s.level or "Beginner"} for s in pref_sports]
     
     # Extract playing times
     playing_time_list = []
+    bio_text = user.about
     if user.about and user.about.startswith("Playing:"):
-        times_str = user.about.split("Playing:")[1]
+        parts = user.about.split("\n\n", 1)
+        times_str = parts[0].split("Playing:")[1]
         playing_time_list = [t.strip() for t in times_str.split(",") if t.strip()]
+        bio_text = parts[1] if len(parts) > 1 else ""
 
     # Check friendship status
     status_val = "none"
@@ -238,16 +273,50 @@ def get_public_profile(
         last_name=user.last_name,
         dob=user.dob,
         gender=user.gender,
-        about=user.about,
+        about=bio_text,
         profile_pic=user.profile_pic,
+        trust_score=user.trust_score or 0.0,
+        ratings_count=user.ratings_count or 0,
         created_at=user.created_at
     )
 
     return PublicProfileResponse(
         user=user_res,
         preferred_sports=sports_list,
+        preferred_sports_details=sports_details_list,
         playing_time=playing_time_list,
         friendship_status=status_val,
         friendship_id=friendship_id,
         mutual_friends_count=mutual_count
     )
+
+
+@router.post("/profile/{user_id}/rate")
+def rate_user(
+    user_id: int,
+    rate_in: RateUserRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot rate yourself")
+        
+    if rate_in.rating < 1 or rate_in.rating > 5:
+        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+        
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    # Calculate new trust score
+    old_score = user.trust_score or 0.0
+    old_count = user.ratings_count or 0
+    
+    new_count = old_count + 1
+    new_score = (old_score * old_count + rate_in.rating) / new_count
+    
+    user.ratings_count = new_count
+    user.trust_score = round(new_score, 1)
+    
+    db.commit()
+    return {"message": "Rating submitted successfully", "trust_score": user.trust_score, "ratings_count": user.ratings_count}

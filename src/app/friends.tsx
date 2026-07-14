@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useRouter, useFocusEffect } from "expo-router";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,6 +10,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View
 } from "react-native";
@@ -59,6 +60,7 @@ export default function FriendsScreen() {
   // Bottom action sheet for leader controls
   const [selectedMember, setSelectedMember] = useState<SquadMember | null>(null);
   const [showMemberMenu, setShowMemberMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const loadData = async () => {
     try {
@@ -75,11 +77,24 @@ export default function FriendsScreen() {
       dispatch(setSquads(squadsRes.data));
 
       // Resolve active squad session
-      if (squadsRes.data.length > 0) {
-        // Display the first squad as the active one
-        setActiveSquad(squadsRes.data[0]);
+      const acceptedSquads = (squadsRes.data || []).filter((sq: any) => {
+        const selfMember = sq.members.find((m: any) => m.user_id === auth.user?.id);
+        return selfMember && selfMember.status === "accepted";
+      });
+
+      // Resolve owned squad and check if it contains other members
+      const ownedSquad = acceptedSquads.find((sq: any) => sq.created_by === auth.user?.id);
+      const hasOtherMembers = ownedSquad && ownedSquad.members.some((m: any) => m.user_id !== auth.user?.id);
+      
+      const joinedSquads = acceptedSquads.filter((sq: any) => sq.created_by !== auth.user?.id);
+      
+      if (ownedSquad && hasOtherMembers) {
+        setActiveSquad(ownedSquad);
+      } else if (joinedSquads.length > 0) {
+        setActiveSquad(joinedSquads[0]);
+      } else if (ownedSquad) {
+        setActiveSquad(ownedSquad);
       } else {
-        // Auto-create a default squad if none exists
         await autoCreateSquad();
       }
     } catch (err) {
@@ -106,9 +121,11 @@ export default function FriendsScreen() {
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -119,13 +136,28 @@ export default function FriendsScreen() {
   const handleInviteToSquad = async (friendId: number) => {
     if (!activeSquad) return;
     try {
-      await api.post(`/add-squad-member/${activeSquad.id}`, { user_id: friendId });
-      Alert.alert("Success", "Friend added to squad successfully!");
+      const res = await api.post(`/add-squad-member/${activeSquad.id}`, { user_id: friendId });
+      const msg = res.data?.message || "Friend added to squad successfully!";
+      Alert.alert("Success", msg);
       loadData();
     } catch (error: any) {
       const errorMsg = error.response?.data?.detail || "Could not invite friend to squad.";
       Alert.alert("Invitation Failed", errorMsg);
     }
+  };
+
+  const handleResendInvitationPrompt = (friendId: number, username: string) => {
+    Alert.alert(
+      "Resend Invitation?",
+      `Do you want to resend the squad invitation to @${username}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Resend",
+          onPress: () => handleInviteToSquad(friendId)
+        }
+      ]
+    );
   };
 
   // Leave / Disband Squad
@@ -229,23 +261,20 @@ export default function FriendsScreen() {
     );
   };
 
-  const isFriendInSquad = (friendId: number) => {
-    if (!activeSquad) return false;
-    return activeSquad.members.some(m => m.user_id === friendId);
-  };
-
-  // Render header search input
+  // Render friends search input
   const renderSearchBar = () => (
-    <TouchableOpacity
-      style={styles.searchBarContainer}
-      onPress={() => router.push("/search-users")}
-      activeOpacity={0.8}
-    >
+    <View style={styles.searchBarContainer}>
       <View style={styles.searchBar}>
         <Ionicons name="search" size={20} color={COLORS.textSecondary} style={styles.searchIcon} />
-        <Text style={styles.searchPlaceholder}>Search users...</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search friends"
+          placeholderTextColor={COLORS.textSecondary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   // Render pending Requests card
@@ -290,7 +319,7 @@ export default function FriendsScreen() {
 
         {/* Squad Members */}
         <View style={styles.squadCard}>
-          {activeSquad.members.map((member) => {
+          {activeSquad.members.filter(m => m.role === "leader" || m.status === "accepted").map((member) => {
             const memberIsLeader = member.role === "leader";
             const isSelf = member.user_id === auth.user?.id;
 
@@ -311,7 +340,7 @@ export default function FriendsScreen() {
               >
                 <View style={styles.squadMemberLeft}>
                   <Image
-                    source={{ uri: member.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150" }}
+                    source={{ uri: member.profile_pic || "https://cdn-icons-png.flaticon.com/512/149/149071.png" }}
                     style={styles.squadAvatar}
                   />
                   <Text style={styles.squadMemberName}>
@@ -347,20 +376,30 @@ export default function FriendsScreen() {
     );
   };
 
+  const filteredFriends = friendState.friends.filter((friend) => 
+    friend.username.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const getFriendSquadStatus = (friendId: number) => {
+    if (!activeSquad) return null;
+    const member = activeSquad.members.find(m => m.user_id === friendId);
+    return member ? member.status : null;
+  };
+
   // Render Friends List
   const renderFriendsList = () => (
     <View style={styles.sectionContainer}>
       <Text style={styles.sectionTitle}>Your friends</Text>
 
-      {friendState.friends.length === 0 ? (
+      {filteredFriends.length === 0 ? (
         <View style={styles.emptyFriendsCard}>
           <Ionicons name="people-outline" size={40} color={COLORS.cardBackground} />
-          <Text style={styles.emptyFriendsText}>You don't have any friends yet.</Text>
+          <Text style={styles.emptyFriendsText}>No friends found.</Text>
         </View>
       ) : (
         <View style={styles.friendsCard}>
-          {friendState.friends.map((friend, index) => {
-            const inSquad = isFriendInSquad(friend.friend_id);
+          {filteredFriends.map((friend, index) => {
+            const squadStatus = getFriendSquadStatus(friend.friend_id);
             // Simulated online indicator (even index is online, odd is offline)
             const isOnline = index % 2 === 0;
 
@@ -369,7 +408,7 @@ export default function FriendsScreen() {
                 key={friend.friend_id}
                 style={[
                   styles.friendRow,
-                  index === friendState.friends.length - 1 ? { borderBottomWidth: 0 } : null
+                  index === filteredFriends.length - 1 ? { borderBottomWidth: 0 } : null
                 ]}
               >
                 <TouchableOpacity 
@@ -378,7 +417,7 @@ export default function FriendsScreen() {
                 >
                   <View>
                     <Image
-                      source={{ uri: friend.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150" }}
+                      source={{ uri: friend.profile_pic || "https://cdn-icons-png.flaticon.com/512/149/149071.png" }}
                       style={styles.friendAvatar}
                     />
                     {isOnline && <View style={styles.onlineDot} />}
@@ -386,11 +425,22 @@ export default function FriendsScreen() {
                   <Text style={styles.friendName}>@{friend.username}</Text>
                 </TouchableOpacity>
 
-                {inSquad ? (
+                {squadStatus === "accepted" && (
                   <View style={styles.inSquadBadge}>
                     <Text style={styles.inSquadText}>In Squad</Text>
                   </View>
-                ) : (
+                )}
+
+                {squadStatus === "pending" && (
+                  <TouchableOpacity
+                    style={[styles.inSquadBadge, { backgroundColor: "#FFE0B2", borderWidth: 1, borderColor: "#FFB74D" }]}
+                    onPress={() => handleResendInvitationPrompt(friend.friend_id, friend.username)}
+                  >
+                    <Text style={[styles.inSquadText, { color: "#FB8C00" }]}>Pending</Text>
+                  </TouchableOpacity>
+                )}
+
+                {squadStatus === null && (
                   <TouchableOpacity
                     style={styles.inviteIconBtn}
                     onPress={() => handleInviteToSquad(friend.friend_id)}
@@ -421,9 +471,9 @@ export default function FriendsScreen() {
           </View>
         ) : (
           <>
-            {renderSearchBar()}
             {renderPendingCard()}
             {renderSquadSection()}
+            {renderSearchBar()}
             {renderFriendsList()}
           </>
         )}
@@ -497,6 +547,14 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_400Regular",
     fontSize: 14,
     color: COLORS.textSecondary,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: "Poppins_400Regular",
+    fontSize: 14,
+    color: COLORS.textPrimary,
+    padding: 0,
+    height: "100%",
   },
   pendingCard: {
     flexDirection: "row",
@@ -759,5 +817,63 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_600SemiBold",
     fontSize: 14,
     color: COLORS.textPrimary,
+  },
+  inviteSquadCard: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 20,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    ...SHADOWS.soft,
+  },
+  inviteSquadInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  inviteSquadName: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+  inviteSquadSubtitle: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  inviteSquadActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.background,
+    paddingTop: 12,
+  },
+  inviteActionBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    minWidth: 80,
+    alignItems: "center",
+  },
+  acceptInviteBtn: {
+    backgroundColor: COLORS.primary,
+  },
+  acceptInviteBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: COLORS.surface,
+  },
+  rejectInviteBtn: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.error,
+  },
+  rejectInviteBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: COLORS.error,
   },
 });

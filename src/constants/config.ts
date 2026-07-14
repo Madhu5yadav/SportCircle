@@ -17,3 +17,5 @@ export const CONFIG = {
   GOOGLE_MAPS_KEY: "", // Configured in app.json if needed
 };
 
+export const DEFAULT_AVATAR = "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+

@@ -5,8 +5,8 @@ from typing import List, Optional
 from math import radians, cos, sin, asin, sqrt
 
 from app.database.db import get_db
-from app.models.models import User, Game, Participant, ChatRoom, Notification
-from app.schemas.schemas import GameCreate, GameResponse, ParticipantResponse
+from app.models.models import User, Game, Participant, ChatRoom, Notification, SquadMember
+from app.schemas.schemas import GameCreate, GameResponse, ParticipantResponse, GameUpdate
 from app.middleware.auth import get_current_user
 from app.services.socket_service import broadcast_game_joined_update
 from app.services.notification_service import NotificationService
@@ -71,7 +71,23 @@ def host_game(
     db_participant = Participant(game_id=db_game.id, user_id=current_user.id)
     db.add(db_participant)
 
-    # 3. Create a chat room for this game
+    # 3. Auto-join accepted squad members if squad_id is provided
+    if game_in.squad_id:
+        squad_members = db.query(SquadMember).filter(
+            SquadMember.squad_id == game_in.squad_id,
+            SquadMember.status == "accepted"
+        ).all()
+        added_count = 1
+        for m in squad_members:
+            if m.user_id == current_user.id:
+                continue
+            if added_count >= db_game.player_count:
+                break
+            db_part = Participant(game_id=db_game.id, user_id=m.user_id)
+            db.add(db_part)
+            added_count += 1
+
+    # 4. Create a chat room for this game
     db_chat_room = ChatRoom(
         name=f"Game: {db_game.name}",
         type="game",
@@ -131,8 +147,9 @@ def list_games(
         ).first() is not None
         
         # Build participants list
+        participants = db.query(Participant).filter(Participant.game_id == g.id).all()
         parts_list = []
-        for p in g.participants:
+        for p in participants:
             parts_list.append(ParticipantResponse(
                 user_id=p.user.id,
                 username=p.user.username,
@@ -203,36 +220,101 @@ async def join_game(
         Participant.user_id == current_user.id
     ).first()
     if existing:
-        return {"message": "Already joined this game"}
+        return {"message": "Already joined this game" if existing.status == "joined" else "Already in the waiting list for this game"}
         
     # Check slots available
-    joined_count = db.query(Participant).filter(Participant.game_id == id).count()
+    joined_count = db.query(Participant).filter(Participant.game_id == id, Participant.status == "joined").count()
     if joined_count >= game.player_count:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Game is already full"
-        )
+        status_val = "waiting"
+    else:
+        status_val = "joined"
         
     # Join
-    p = Participant(game_id=id, user_id=current_user.id)
+    p = Participant(game_id=id, user_id=current_user.id, status=status_val)
     db.add(p)
     db.commit()
     
+    # Auto-join accepted squad members if this user leads a squad
+    from app.models.models import Squad
+    squad = db.query(Squad).filter(Squad.created_by == current_user.id).first()
+    if squad:
+        squad_members = db.query(SquadMember).filter(
+            SquadMember.squad_id == squad.id,
+            SquadMember.status == "accepted",
+            SquadMember.user_id != current_user.id
+        ).all()
+        for m in squad_members:
+            # Check if this squad member is already a participant
+            exists_m = db.query(Participant).filter(
+                Participant.game_id == id,
+                Participant.user_id == m.user_id
+            ).first()
+            if not exists_m:
+                # Count current joined participants
+                current_joined = db.query(Participant).filter(
+                    Participant.game_id == id,
+                    Participant.status == "joined"
+                ).count()
+                
+                m_status = "joined" if current_joined < game.player_count else "waiting"
+                db_m_part = Participant(game_id=id, user_id=m.user_id, status=m_status)
+                db.add(db_m_part)
+        db.commit()
+        
     # Broadcast count update via Socket.IO
-    new_count = joined_count + 1
+    new_count = db.query(Participant).filter(Participant.game_id == id, Participant.status == "joined").count()
     await broadcast_game_joined_update(game.id, new_count, game.player_count)
     
     # Notify host
     if game.host_id != current_user.id:
+        title_str = "Player Joined!" if status_val == "joined" else "Player added to Waiting List"
+        msg_str = f"{current_user.username} joined your game '{game.name}'!" if status_val == "joined" else f"{current_user.username} joined the waiting list for '{game.name}'"
         NotificationService.create_notification(
             user_id=game.host_id,
-            title="Player Joined!",
-            message=f"{current_user.username} joined your game '{game.name}'!",
+            title=title_str,
+            message=msg_str,
             notif_type="game_accepted",
             db=db
         )
         
-    return {"message": "Joined game successfully", "joined_count": new_count}
+    return {
+        "message": "Joined game successfully" if status_val == "joined" else "Added to waiting list", 
+        "joined_count": new_count
+    }
+
+
+def fill_game_slot_from_waiting_list(game_id: int, db: Session):
+    # Count current joined participants
+    joined_count = db.query(Participant).filter(
+        Participant.game_id == game_id,
+        Participant.status == "joined"
+    ).count()
+    game = db.query(Game).filter(Game.id == game_id).first()
+    if not game:
+        return
+    
+    # If we have free slots, pull from waiting list
+    while joined_count < game.player_count:
+        next_waiting = db.query(Participant).filter(
+            Participant.game_id == game_id,
+            Participant.status == "waiting"
+        ).order_by(Participant.id.asc()).first()
+        
+        if not next_waiting:
+            break
+            
+        next_waiting.status = "joined"
+        db.commit()
+        joined_count += 1
+        
+        # Notify the promoted participant
+        NotificationService.create_notification(
+            user_id=next_waiting.user_id,
+            title="Off the Waiting List!",
+            message=f"Good news! You have been moved off the waiting list and are now joined in the game '{game.name}'!",
+            notif_type="system",
+            db=db
+        )
 
 
 @router.post("/leave-game/{id}")
@@ -260,23 +342,52 @@ async def leave_game(
             detail="You are not a participant in this game"
         )
         
+    leaving_status = existing.status
+    
+    # If the leaving user is a squad leader, also remove their accepted squad members from this game
+    from app.models.models import Squad
+    squad = db.query(Squad).filter(Squad.created_by == current_user.id).first()
+    if squad:
+        squad_members = db.query(SquadMember).filter(
+            SquadMember.squad_id == squad.id,
+            SquadMember.status == "accepted",
+            SquadMember.user_id != current_user.id
+        ).all()
+        for m in squad_members:
+            db.query(Participant).filter(
+                Participant.game_id == id,
+                Participant.user_id == m.user_id
+            ).delete()
+        db.commit()
+        
     is_host = (game.host_id == current_user.id)
     
     if is_host:
-        # Check if there are other participants
+        # Check if there are other participants (prefer joined first)
         other_participant = db.query(Participant).filter(
             Participant.game_id == id,
-            Participant.user_id != current_user.id
+            Participant.user_id != current_user.id,
+            Participant.status == "joined"
         ).order_by(Participant.joined_at.asc(), Participant.id.asc()).first()
         
+        if not other_participant:
+            other_participant = db.query(Participant).filter(
+                Participant.game_id == id,
+                Participant.user_id != current_user.id
+            ).order_by(Participant.joined_at.asc(), Participant.id.asc()).first()
+            
         if other_participant:
-            # Promote the next joined player to Host
+            # Promote the next player to Host
             new_host_id = other_participant.user_id
             game.host_id = new_host_id
+            other_participant.status = "joined" # Ensure they are joined
             
             # Remove the current host from the participants list
             db.delete(existing)
             db.commit()
+            
+            # Fill slot from waiting list if needed
+            fill_game_slot_from_waiting_list(id, db)
             
             # Notify the new host
             NotificationService.create_notification(
@@ -288,7 +399,7 @@ async def leave_game(
             )
             
             # Broadcast the updated player count
-            joined_count = db.query(Participant).filter(Participant.game_id == id).count()
+            joined_count = db.query(Participant).filter(Participant.game_id == id, Participant.status == "joined").count()
             await broadcast_game_joined_update(game.id, joined_count, game.player_count)
             
             return {
@@ -310,7 +421,11 @@ async def leave_game(
         db.delete(existing)
         db.commit()
         
-        joined_count = db.query(Participant).filter(Participant.game_id == id).count()
+        if leaving_status == "joined":
+            # Fill slot from waiting list
+            fill_game_slot_from_waiting_list(id, db)
+            
+        joined_count = db.query(Participant).filter(Participant.game_id == id, Participant.status == "joined").count()
         await broadcast_game_joined_update(game.id, joined_count, game.player_count)
         
         # Notify host
@@ -349,6 +464,35 @@ def delete_game(
     return {"message": "Game deleted successfully"}
 
 
+@router.put("/game/{id}", response_model=GameResponse)
+def update_game(
+    id: int,
+    game_in: GameUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    game = db.query(Game).filter(Game.id == id).first()
+    if not game:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Game not found"
+        )
+        
+    if game.host_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the host can edit game details"
+        )
+        
+    update_data = game_in.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(game, field, value)
+        
+    db.commit()
+    db.refresh(game)
+    return get_game_details(game.id, current_user, db)
+
+
 # Helper to construct full game details
 def get_game_details(game_id: int, user: User, db: Session) -> Optional[GameResponse]:
     g = db.query(Game).filter(Game.id == game_id).first()
@@ -361,8 +505,10 @@ def get_game_details(game_id: int, user: User, db: Session) -> Optional[GameResp
         Participant.user_id == user.id
     ).first() is not None
     
+    # Build participants list
+    participants = db.query(Participant).filter(Participant.game_id == g.id).all()
     parts_list = []
-    for p in g.participants:
+    for p in participants:
         parts_list.append(ParticipantResponse(
             user_id=p.user.id,
             username=p.user.username,

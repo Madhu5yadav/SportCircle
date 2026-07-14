@@ -30,6 +30,7 @@ export default function ProfileScreen() {
 
   // States
   const [preferredSports, setPreferredSports] = useState<string[]>([]);
+  const [preferredSportsDetails, setPreferredSportsDetails] = useState<any[]>([]);
   const [playingTime, setPlayingTime] = useState<string[]>([]);
   const [txHistory, setTxHistory] = useState<any[]>([]);
   const [games, setGames] = useState<any[]>([]);
@@ -48,6 +49,7 @@ export default function ProfileScreen() {
     try {
       const res = await api.get("/profile");
       setPreferredSports(res.data.preferred_sports || []);
+      setPreferredSportsDetails(res.data.preferred_sports_details || []);
       setPlayingTime(res.data.playing_time || []);
 
       const txs = await api.get("/profile/payments");
@@ -133,7 +135,7 @@ export default function ProfileScreen() {
           {/* Circular Avatar + Details Column */}
           <View style={styles.profileHeaderRow}>
             <Image
-              source={{ uri: auth.user?.profile_pic || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=250" }}
+              source={{ uri: auth.user?.profile_pic || "https://cdn-icons-png.flaticon.com/512/149/149071.png" }}
               style={styles.avatar}
             />
             <View style={styles.detailsColumn}>
@@ -158,7 +160,12 @@ export default function ProfileScreen() {
               <Text style={styles.statLabel}>Trust Score</Text>
               <View style={styles.statValueRow}>
                 <Ionicons name="star" size={16} color="#FFD700" />
-                <Text style={styles.statValue}>3/5</Text>
+                <Text style={styles.statValue}>
+                  {auth.user?.trust_score && auth.user.trust_score > 0
+                    ? (auth.user.trust_score % 1 === 0 ? auth.user.trust_score.toString() : auth.user.trust_score.toFixed(1))
+                    : "0"}
+                  /5
+                </Text>
               </View>
             </View>
           </View>
@@ -169,11 +176,21 @@ export default function ProfileScreen() {
             {preferredSports.length === 0 ? (
               <Text style={styles.emptyText}>No preferred sports added yet</Text>
             ) : (
-              preferredSports.map((sport, index) => (
-                <View key={index} style={styles.pillBadge}>
-                  <Text style={styles.pillText}>{sport}</Text>
-                </View>
-              ))
+              preferredSports.map((sport, index) => {
+                const details = preferredSportsDetails.find((s: any) => s.name === sport);
+                const level = details ? details.level : "Beginner";
+                const levelColor = level === "Beginner" ? "#4CAF50" : level === "Intermediate" ? "#FF9800" : "#E91E63";
+                const letter = level ? level.charAt(0).toUpperCase() : "B";
+
+                return (
+                  <View key={index} style={[styles.pillBadge, { position: "relative", paddingLeft: 16 }]}>
+                    <View style={[styles.levelCircle, { backgroundColor: levelColor }]}>
+                      <Text style={styles.levelCircleText}>{letter}</Text>
+                    </View>
+                    <Text style={styles.pillText}>{sport}</Text>
+                  </View>
+                );
+              })
             )}
           </View>
 
@@ -195,7 +212,7 @@ export default function ProfileScreen() {
         {/* 3. List of Options matching Figma design */}
         <View style={styles.optionsList}>
           {/* Edit Profile */}
-          <TouchableOpacity style={styles.optionRow} onPress={() => router.push("/personal-details")}>
+          <TouchableOpacity style={styles.optionRow} onPress={() => router.push({ pathname: "/personal-details", params: { mode: "edit" } })}>
             <Text style={styles.optionText}>Edit Profile</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textPrimary} />
           </TouchableOpacity>
@@ -802,5 +819,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textSecondary,
     marginTop: 4,
+  },
+  levelCircle: {
+    position: "absolute",
+    top: -5,
+    left: -5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  levelCircleText: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 7.5,
+    color: "white",
   },
 });

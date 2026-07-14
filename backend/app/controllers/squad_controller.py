@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+from pydantic import BaseModel
 
 from app.database.db import get_db
 from app.models.models import User, Squad, SquadMember, ChatRoom
@@ -16,6 +17,11 @@ def create_squad(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # Enforce only one squad led by this user
+    existing_squad = db.query(Squad).filter(Squad.created_by == current_user.id).first()
+    if existing_squad:
+        return get_squad_details(existing_squad.id, db)
+
     # 1. Create Squad
     db_squad = Squad(name=squad_in.name, created_by=current_user.id)
     db.add(db_squad)
@@ -23,33 +29,25 @@ def create_squad(
     db.refresh(db_squad)
     
     # 2. Add Leader
-    leader_member = SquadMember(squad_id=db_squad.id, user_id=current_user.id, role="leader")
+    leader_member = SquadMember(squad_id=db_squad.id, user_id=current_user.id, role="leader", status="accepted")
     db.add(leader_member)
     
-    # 3. Add other members
+    # 3. Add other members as pending
     for uid in squad_in.member_ids:
         if uid == current_user.id:
             continue
-        member = SquadMember(squad_id=db_squad.id, user_id=uid, role="member")
+        member = SquadMember(squad_id=db_squad.id, user_id=uid, role="member", status="pending")
         db.add(member)
         
         # Notify user they were added to a squad
         NotificationService.create_notification(
             user_id=uid,
             title="Squad Invitation",
-            message=f"You have been added to the squad '{db_squad.name}' by {current_user.username}!",
+            message=f"You have been invited to join the squad '{db_squad.name}' by {current_user.username}! [squad_id:{db_squad.id}]",
             notif_type="squad_invite",
             db=db
         )
         
-    # 4. Create a chat room for this squad
-    db_chat_room = ChatRoom(
-        name=f"Squad: {db_squad.name}",
-        type="squad",
-        squad_id=db_squad.id
-    )
-    db.add(db_chat_room)
-    
     db.commit()
     return get_squad_details(db_squad.id, db)
 
@@ -88,18 +86,29 @@ def add_member(
     ).first()
     
     if existing:
-        return {"message": "User is already a member of this squad"}
+        if existing.status == "accepted":
+            return {"message": "User is already a member of this squad"}
+        else:
+            # Resend invitation notification
+            NotificationService.create_notification(
+                user_id=req.user_id,
+                title="Squad Invitation",
+                message=f"You have been invited to join the squad '{squad.name}'! [squad_id:{squad.id}]",
+                notif_type="squad_invite",
+                db=db
+            )
+            return {"message": "Invitation notification resent successfully"}
         
-    # Add member
-    db_member = SquadMember(squad_id=squad_id, user_id=req.user_id, role="member")
+    # Add member as pending
+    db_member = SquadMember(squad_id=squad_id, user_id=req.user_id, role="member", status="pending")
     db.add(db_member)
     db.commit()
     
     # Notify user
     NotificationService.create_notification(
         user_id=req.user_id,
-        title="Added to Squad",
-        message=f"You have been added to the squad '{squad.name}'!",
+        title="Squad Invitation",
+        message=f"You have been invited to join the squad '{squad.name}'! [squad_id:{squad.id}]",
         notif_type="squad_invite",
         db=db
     )
@@ -236,6 +245,7 @@ def get_squad_details(squad_id: int, db: Session) -> SquadResponse:
             username=m.user.username,
             profile_pic=m.user.profile_pic,
             role=m.role,
+            status=m.status,
             joined_at=m.joined_at
         ))
         
@@ -338,4 +348,35 @@ def remove_all_members(
     
     db.commit()
     return {"message": "All squad members removed successfully"}
+
+
+class SquadInvitationResponse(BaseModel):
+    action: str  # accept, reject
+
+
+@router.post("/squads/invitation/{squad_id}/respond")
+def respond_squad_invitation(
+    squad_id: int,
+    req_body: SquadInvitationResponse,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    member = db.query(SquadMember).filter(
+        SquadMember.squad_id == squad_id,
+        SquadMember.user_id == current_user.id
+    ).first()
+    
+    if not member:
+        raise HTTPException(status_code=404, detail="Squad invitation not found")
+        
+    if req_body.action.lower() == "accept":
+        member.status = "accepted"
+        db.commit()
+        return {"message": "Squad invitation accepted"}
+    elif req_body.action.lower() == "reject":
+        db.delete(member)
+        db.commit()
+        return {"message": "Squad invitation rejected"}
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action. Use 'accept' or 'reject'.")
 

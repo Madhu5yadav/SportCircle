@@ -8,7 +8,8 @@ import {
   ScrollView, 
   ActivityIndicator,
   Alert,
-  Dimensions
+  Dimensions,
+  Modal
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useDispatch, useSelector } from "react-redux";
@@ -45,7 +46,8 @@ export default function PreferredSportsScreen() {
   const dispatch = useDispatch();
   const auth = useSelector((state: RootState) => state.auth);
 
-  const [selectedSports, setSelectedSports] = useState<string[]>([]);
+  const [selectedSports, setSelectedSports] = useState<{ id: string; level: string }[]>([]);
+  const [activeSport, setActiveSport] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -53,8 +55,18 @@ export default function PreferredSportsScreen() {
       try {
         const response = await api.get("/profile");
         const profileData = response.data;
-        if (profileData.preferred_sports && profileData.preferred_sports.length > 0) {
-          setSelectedSports(profileData.preferred_sports);
+        if (profileData.preferred_sports_details && profileData.preferred_sports_details.length > 0) {
+          const mapped = profileData.preferred_sports_details.map((s: any) => ({
+            id: s.name,
+            level: s.level,
+          }));
+          setSelectedSports(mapped);
+        } else if (profileData.preferred_sports && profileData.preferred_sports.length > 0) {
+          const mapped = profileData.preferred_sports.map((s: any) => ({
+            id: s,
+            level: "Beginner",
+          }));
+          setSelectedSports(mapped);
         }
       } catch (error) {
         console.log("Error loading preferred sports:", error);
@@ -63,12 +75,19 @@ export default function PreferredSportsScreen() {
     fetchProfileAndSports();
   }, []);
 
-  const handleToggleSport = (id: string) => {
-    if (selectedSports.includes(id)) {
-      setSelectedSports(selectedSports.filter((s) => s !== id));
+  const handleSelectSportLevel = (sportId: string, level: string) => {
+    const existing = selectedSports.find((s) => s.id === sportId);
+    if (existing) {
+      setSelectedSports(selectedSports.map((s) => s.id === sportId ? { ...s, level } : s));
     } else {
-      setSelectedSports([...selectedSports, id]);
+      setSelectedSports([...selectedSports, { id: sportId, level }]);
     }
+    setActiveSport(null);
+  };
+
+  const handleDeselectSport = (sportId: string) => {
+    setSelectedSports(selectedSports.filter((s) => s.id !== sportId));
+    setActiveSport(null);
   };
 
   const handleSubmit = async () => {
@@ -81,7 +100,8 @@ export default function PreferredSportsScreen() {
     try {
       // 1. Save preferences to backend
       await api.post("/profile/preferred-sports", {
-        sports: selectedSports,
+        sports: selectedSports.map((s) => s.id),
+        levels: selectedSports.map((s) => s.level),
       });
 
       // 2. Fetch full updated profile
@@ -127,7 +147,8 @@ export default function PreferredSportsScreen() {
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <View style={styles.grid}>
           {SPORTS_LIST.map((sport) => {
-            const isSelected = selectedSports.includes(sport.id);
+            const selectedItem = selectedSports.find((s) => s.id === sport.id);
+            const isSelected = !!selectedItem;
             return (
               <TouchableOpacity
                 key={sport.id}
@@ -135,8 +156,13 @@ export default function PreferredSportsScreen() {
                   styles.gridItem,
                   isSelected ? styles.itemSelected : null
                 ]}
-                onPress={() => handleToggleSport(sport.id)}
+                onPress={() => setActiveSport(sport.id)}
               >
+                {isSelected && (
+                  <View style={styles.levelBadge}>
+                    <Text style={styles.levelBadgeText}>{selectedItem.level}</Text>
+                  </View>
+                )}
                 <View style={[
                   styles.iconWrapper,
                   isSelected ? styles.iconSelected : null
@@ -158,6 +184,57 @@ export default function PreferredSportsScreen() {
           })}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={activeSport !== null}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setActiveSport(null)}
+      >
+        <TouchableOpacity 
+          style={styles.modalBackdrop} 
+          activeOpacity={1} 
+          onPress={() => setActiveSport(null)}
+        >
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalDragHandle} />
+            <Text style={styles.modalTitle}>Select your level</Text>
+            <Text style={styles.modalSubtitle}>How skilled are you in {activeSport}?</Text>
+            
+            <View style={styles.modalOptions}>
+              {["Beginner", "Intermediate", "Professional"].map((level) => {
+                const isCurrent = activeSport ? selectedSports.find(s => s.id === activeSport)?.level === level : false;
+                return (
+                  <TouchableOpacity
+                    key={level}
+                    style={[
+                      styles.levelBtn,
+                      isCurrent ? styles.levelBtnActive : null
+                    ]}
+                    onPress={() => activeSport && handleSelectSportLevel(activeSport, level)}
+                  >
+                    <Text style={[
+                      styles.levelBtnText,
+                      isCurrent ? styles.levelBtnTextActive : null
+                    ]}>
+                      {level}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              {activeSport && selectedSports.some(s => s.id === activeSport) && (
+                <TouchableOpacity
+                  style={styles.removeBtn}
+                  onPress={() => handleDeselectSport(activeSport)}
+                >
+                  <Text style={styles.removeBtnText}>Remove Sport</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <View style={styles.footer}>
         <TouchableOpacity 
@@ -220,11 +297,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: SPACING.md,
+    position: "relative",
+    overflow: "hidden",
     ...SHADOWS.soft,
   },
   itemSelected: {
     borderColor: COLORS.primary,
-    backgroundColor: COLORS.cardBackground + "40",
   },
   iconWrapper: {
     width: 60,
@@ -270,6 +348,117 @@ const styles = StyleSheet.create({
   submitBtnText: {
     fontFamily: "Poppins_600SemiBold",
     fontSize: 16,
+    color: COLORS.surface,
+  },
+  cardLevelText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 10,
+    color: COLORS.primary,
+    marginTop: 4,
+    textAlign: "center",
+  },
+  levelBadge: {
+    position: "absolute",
+    top: 6,
+    alignSelf: "center",
+    backgroundColor: COLORS.primary,
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    zIndex: 10,
+  },
+  levelBadgeText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 8.5,
+    color: COLORS.surface,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: 40,
+    paddingTop: SPACING.sm,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  modalDragHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: "#E4ECFA",
+    borderRadius: 2.5,
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontFamily: "Poppins_700Bold",
+    fontSize: 18,
+    color: COLORS.textPrimary,
+    textAlign: "center",
+  },
+  modalSubtitle: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    marginBottom: 20,
+    marginTop: 4,
+  },
+  modalOptions: {
+    gap: 12,
+  },
+  levelBtn: {
+    backgroundColor: "#F4F7FD",
+    borderWidth: 1,
+    borderColor: "#E4ECFA",
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  levelBtnActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  levelBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 15,
+    color: COLORS.textPrimary,
+  },
+  levelBtnTextActive: {
+    color: COLORS.surface,
+  },
+  removeBtn: {
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  removeBtnText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 14,
+    color: COLORS.error,
+  },
+  levelBadge: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+    backgroundColor: COLORS.primary,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 6,
+    zIndex: 10,
+  },
+  levelBadgeText: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 8,
     color: COLORS.surface,
   },
 });
