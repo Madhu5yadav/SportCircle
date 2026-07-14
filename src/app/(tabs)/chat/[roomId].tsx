@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import * as ImagePicker from "expo-image-picker";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from "react-native-reanimated";
+import {
+  GestureDetector,
+  Gesture,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import { 
   View, 
   Text, 
@@ -73,6 +83,11 @@ export default function ChatRoomScreen() {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [showImageSourceModal, setShowImageSourceModal] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
+  const [viewerImageUrl, setViewerImageUrl] = useState<string | null>(null);
+  const [previewAsset, setPreviewAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
+
+  const openViewer = (url: string) => setViewerImageUrl(url);
+  const closeViewer = () => setViewerImageUrl(null);
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener("keyboardDidShow", (e) => {
@@ -288,36 +303,43 @@ export default function ChatRoomScreen() {
       }
 
       const result = useCamera
-        ? await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8, allowsEditing: true })
-        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8, allowsEditing: true });
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
 
       if (!result.canceled && result.assets.length > 0) {
-        const asset = result.assets[0];
-        setImageUploading(true);
-        try {
-          const formData = new FormData();
-          formData.append("file", {
-            uri: asset.uri,
-            name: asset.fileName || `photo_${Date.now()}.jpg`,
-            type: asset.mimeType || "image/jpeg",
-          } as any);
-
-          const uploadRes = await api.post("/chat/upload-image", formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
-
-          sendMessage({
-            type: "image",
-            image_url: uploadRes.data.url,
-          });
-        } catch (err: any) {
-          Alert.alert("Upload Failed", err.response?.data?.detail || "Could not upload image.");
-        } finally {
-          setImageUploading(false);
-        }
+        // Show custom preview instead of uploading immediately
+        setPreviewAsset(result.assets[0]);
       }
     } catch (err) {
       Alert.alert("Error", "Something went wrong when opening the picker.");
+    }
+  };
+
+  const handleSendPreviewImage = async () => {
+    if (!previewAsset) return;
+    const asset = previewAsset;
+    setPreviewAsset(null);
+    setImageUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", {
+        uri: asset.uri,
+        name: asset.fileName || `photo_${Date.now()}.jpg`,
+        type: asset.mimeType || "image/jpeg",
+      } as any);
+
+      const uploadRes = await api.post("/chat/upload-image", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      sendMessage({
+        type: "image",
+        image_url: uploadRes.data.url,
+      });
+    } catch (err: any) {
+      Alert.alert("Upload Failed", err.response?.data?.detail || "Could not upload image.");
+    } finally {
+      setImageUploading(false);
     }
   };
 
@@ -446,14 +468,19 @@ export default function ChatRoomScreen() {
                     )}
 
                     {item.type === "image" && (
-                      <View style={styles.imageBubbleWrapper}>
-                        <Image 
-                          source={{ uri: item.image_url }} 
-                          style={styles.bubbleImg} 
-                          resizeMode="contain"
-                        />
-                        {item.content && <Text style={[styles.msgText, isOwn ? styles.msgOwnText : null, { marginTop: 6 }]}>{item.content}</Text>}
-                      </View>
+                      <TouchableOpacity 
+                        activeOpacity={0.9}
+                        onPress={() => openViewer(item.image_url)}
+                      >
+                        <View style={styles.imageBubbleWrapper}>
+                          <Image 
+                            source={{ uri: item.image_url }} 
+                            style={styles.bubbleImg} 
+                            resizeMode="contain"
+                          />
+                          {item.content && <Text style={[styles.msgText, isOwn ? styles.msgOwnText : null, { marginTop: 6 }]}>{item.content}</Text>}
+                        </View>
+                      </TouchableOpacity>
                     )}
 
                     {item.type === "poll" && (
@@ -790,9 +817,164 @@ export default function ChatRoomScreen() {
           </View>
         </View>
       )}
+
+      {/* ===== CUSTOM IMAGE PREVIEW (replaces native crop screen) ===== */}
+      <Modal
+        visible={!!previewAsset}
+        transparent={false}
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setPreviewAsset(null)}
+      >
+        <View style={styles.previewContainer}>
+          {/* Header bar */}
+          <View style={styles.previewHeader}>
+            <TouchableOpacity
+              style={styles.previewBackBtn}
+              onPress={() => setPreviewAsset(null)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={styles.previewHeaderTitle}>Preview</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          {/* Full image preview */}
+          <View style={styles.previewImageContainer}>
+            {previewAsset && (
+              <Image
+                source={{ uri: previewAsset.uri }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+
+          {/* Bottom action bar */}
+          <View style={styles.previewBottomBar}>
+            <TouchableOpacity
+              style={styles.previewCancelBtn}
+              onPress={() => setPreviewAsset(null)}
+            >
+              <Text style={styles.previewCancelText}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.previewSendBtn}
+              onPress={handleSendPreviewImage}
+            >
+              <Ionicons name="send" size={18} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.previewSendText}>Send</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ===== FULLSCREEN IMAGE VIEWER ===== */}
+      {viewerImageUrl && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={closeViewer}
+        >
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <View style={styles.viewerBg}>
+              {/* Close button */}
+              <TouchableOpacity style={styles.viewerCloseBtn} onPress={closeViewer}>
+                <Ionicons name="close" size={28} color="#fff" />
+              </TouchableOpacity>
+
+              {/* Pinch + Pan + Double-tap image */}
+              <ViewerImage imageUrl={viewerImageUrl} />
+            </View>
+          </GestureHandlerRootView>
+        </Modal>
+      )}
     </View>
   );
 }
+
+// ── Full-screen image viewer with pinch, pan & double-tap ─────────────
+function ViewerImage({ imageUrl }: { imageUrl: string }) {
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const transX = useSharedValue(0);
+  const transY = useSharedValue(0);
+  const savedTransX = useSharedValue(0);
+  const savedTransY = useSharedValue(0);
+
+  // Pinch to zoom (min 1x, max 6x)
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      scale.value = Math.max(1, Math.min(savedScale.value * e.scale, 6));
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+    });
+
+  // Pan to move when zoomed in
+  const panGesture = Gesture.Pan()
+    .averageTouches(true)
+    .onUpdate((e) => {
+      if (savedScale.value > 1) {
+        transX.value = savedTransX.value + e.translationX;
+        transY.value = savedTransY.value + e.translationY;
+      }
+    })
+    .onEnd(() => {
+      savedTransX.value = transX.value;
+      savedTransY.value = transY.value;
+    });
+
+  // Double-tap: toggle zoom 1x <-> 2.5x
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDuration(250)
+    .onEnd(() => {
+      if (scale.value > 1) {
+        // Reset to fit
+        scale.value = withSpring(1, { damping: 15 });
+        savedScale.value = 1;
+        transX.value = withSpring(0, { damping: 15 });
+        transY.value = withSpring(0, { damping: 15 });
+        savedTransX.value = 0;
+        savedTransY.value = 0;
+      } else {
+        scale.value = withSpring(2.5, { damping: 15 });
+        savedScale.value = 2.5;
+      }
+    });
+
+  // Exclusive: double-tap is tried first; if it doesn't match, pinch+pan run
+  const composed = Gesture.Exclusive(
+    doubleTap,
+    Gesture.Simultaneous(pinchGesture, panGesture)
+  );
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: transX.value },
+      { translateY: transY.value },
+      { scale: scale.value },
+    ],
+  }));
+
+  return (
+    <GestureDetector gesture={composed}>
+      <Animated.View style={StyleSheet.absoluteFillObject}>
+        <Animated.Image
+          source={{ uri: imageUrl }}
+          style={[StyleSheet.absoluteFillObject, animStyle]}
+          resizeMode="contain"
+        />
+      </Animated.View>
+    </GestureDetector>
+  );
+}
+
 
 const styles = StyleSheet.create({
   container: {
@@ -1349,5 +1531,20 @@ const styles = StyleSheet.create({
     fontFamily: "Poppins_500Medium",
     fontSize: 14,
     color: COLORS.textPrimary,
+  },
+
+  // ── Fullscreen Image Viewer ──────────────────────────────
+  viewerBg: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  viewerCloseBtn: {
+    position: "absolute",
+    top: (StatusBar.currentHeight || 24) + 12,
+    right: 18,
+    zIndex: 10,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderRadius: 24,
+    padding: 8,
   },
 });
