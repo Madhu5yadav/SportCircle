@@ -1,7 +1,7 @@
 
 // Physical device via Expo Go needs the PC's LAN IP (not localhost/10.0.2.2,
 // which only work for emulators). Update if your PC's IP changes.
-const DEV_HOST = "192.168.1.5";
+const DEV_HOST = "192.168.0.14";
 
 export const CONFIG = {
   API_URL: `http://${DEV_HOST}:8000`,
