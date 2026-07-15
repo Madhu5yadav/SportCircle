@@ -151,7 +151,7 @@ export default function JoinGameScreen() {
                   <Callout tooltip onPress={() => router.push({ pathname: "/(tabs)/explore", params: { gameId: g.id } })}>
                     <View style={styles.calloutCard}>
                       <Text style={styles.calloutTitle}>{g.name}</Text>
-                      <Text style={styles.calloutSubtitle}>{g.sport_type} • {g.joined_count}/{g.player_count} Joined{g.waiting_count > 0 ? ` (${g.waiting_count} waiting)` : ""}</Text>
+                      <Text style={styles.calloutSubtitle}>{g.sport_type} • {g.joined_count}/{g.player_count} Joined{(g.waiting_count ?? 0) > 0 ? ` (${g.waiting_count} waiting)` : ""}</Text>
                       <Text style={styles.calloutAction}>Tap to view details</Text>
                     </View>
                   </Callout>

@@ -4,6 +4,7 @@ interface Participant {
   user_id: number;
   username: string;
   profile_pic?: string;
+  status?: string;
   joined_at: string;
 }
 
@@ -28,6 +29,7 @@ export interface Game {
   description?: string;
   created_at: string;
   joined_count: number;
+  waiting_count?: number;
   is_joined?: boolean;
   participants?: Participant[];
 }
