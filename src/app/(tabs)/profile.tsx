@@ -438,7 +438,18 @@ export default function ProfileScreen() {
                 <Ionicons name="close" size={24} color={COLORS.textPrimary} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.supportLabel}>Have queries or need booking assistance?</Text>
+
+            <TouchableOpacity style={styles.modalListItem} onPress={() => { setShowSupportModal(false); router.push("/support-chatbot" as any); }}>
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color={COLORS.primary} style={{ marginRight: 12 }} />
+              <Text style={styles.modalListText}>Chat with CircleBot</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalListItem} onPress={() => { setShowSupportModal(false); router.push("/support-tickets" as any); }}>
+              <Ionicons name="receipt-outline" size={20} color={COLORS.primary} style={{ marginRight: 12 }} />
+              <Text style={styles.modalListText}>Support Tickets</Text>
+            </TouchableOpacity>
+
+            <Text style={[styles.supportLabel, { marginTop: 20, marginBottom: 8 }]}>Direct Contacts</Text>
             <View style={styles.supportRow}>
               <Ionicons name="mail" size={20} color={COLORS.primary} />
               <Text style={styles.supportValue}>support@sportcircle.com</Text>

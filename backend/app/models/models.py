@@ -281,3 +281,16 @@ class UserBlock(Base):
     blocker_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     blocked_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    title = Column(String(100), nullable=False)
+    description = Column(Text, nullable=False)
+    category = Column(String(50), nullable=False)  # Booking, Wallet, Match, Account, Other
+    status = Column(String(20), default="Open")  # Open, In Progress, Resolved
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")

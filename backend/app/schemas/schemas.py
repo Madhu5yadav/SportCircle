@@ -430,3 +430,20 @@ class UserBlockResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# --- Support Ticket Schemas ---
+class TicketCreate(BaseModel):
+    title: str
+    description: str
+    category: str
+
+class TicketResponse(BaseModel):
+    id: int
+    title: str
+    description: str
+    category: str
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
