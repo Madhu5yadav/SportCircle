@@ -171,11 +171,20 @@ export default function ChatRoomScreen() {
         console.log("Error loading room detail metadata:", err);
       }
       const response = await api.get(`/chat/room/${parsedRoomId}/messages`);
-      // Parse JSON fields
+      // Parse JSON fields safely
+      const safeParse = (val: any) => {
+        if (!val) return undefined;
+        if (typeof val !== "string") return val;
+        try {
+          return JSON.parse(val);
+        } catch (e) {
+          return val;
+        }
+      };
       const formatted = response.data.map((m: any) => ({
         ...m,
-        poll_options: m.poll_options ? JSON.parse(m.poll_options) : undefined,
-        poll_votes: m.poll_votes ? JSON.parse(m.poll_votes) : undefined,
+        poll_options: safeParse(m.poll_options),
+        poll_votes: safeParse(m.poll_votes),
       }));
       
       dispatch(setMessages({ roomId: parsedRoomId, messages: formatted }));
