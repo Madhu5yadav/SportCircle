@@ -35,6 +35,7 @@ interface SquadMember {
   username: string;
   profile_pic?: string;
   role: "leader" | "member";
+  status?: string;
   joined_at: string;
 }
 
