@@ -27,6 +27,10 @@ export interface ChatRoom {
   last_message?: Message;
   other_user_id?: number;
   other_user_profile_pic?: string;
+  game_date?: string;
+  start_time?: string;
+  blocked_by_me?: boolean;
+  has_blocked_me?: boolean;
 }
 
 interface TypingUser {
