@@ -175,6 +175,8 @@ class ChatRoom(Base):
     type = Column(String(20), default="group")  # direct, group, game, squad
     game_id = Column(Integer, ForeignKey("games.id", ondelete="CASCADE"), default=None)
     squad_id = Column(Integer, ForeignKey("squads.id", ondelete="CASCADE"), default=None)
+    user1_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), default=None)
+    user2_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), default=None)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     game = relationship("Game", back_populates="chat_rooms")
@@ -270,3 +272,12 @@ class BookingAccessRequest(Base):
 
     game = relationship("Game")
     user = relationship("User")
+
+
+class UserBlock(Base):
+    __tablename__ = "user_blocks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    blocker_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    blocked_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)

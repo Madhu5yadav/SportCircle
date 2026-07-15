@@ -398,6 +398,11 @@ export default function ProfileScreen() {
               <Ionicons name="create-outline" size={20} color={COLORS.primary} style={{ marginRight: 12 }} />
               <Text style={styles.modalListText}>Update Profile Details</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity style={styles.modalListItem} onPress={() => { setShowSettingsModal(false); router.push("/blocked-users"); }}>
+              <Ionicons name="ban-outline" size={20} color={COLORS.primary} style={{ marginRight: 12 }} />
+              <Text style={styles.modalListText}>Blocked Users</Text>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>

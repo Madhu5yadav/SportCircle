@@ -25,6 +25,8 @@ export interface ChatRoom {
   squad_id?: number;
   created_at: string;
   last_message?: Message;
+  other_user_id?: number;
+  other_user_profile_pic?: string;
 }
 
 interface TypingUser {
@@ -54,6 +56,32 @@ const chatSlice = createSlice({
   reducers: {
     setRooms: (state, action: PayloadAction<ChatRoom[]>) => {
       state.rooms = action.payload;
+    },
+    updateBlockStatus: (
+      state,
+      action: PayloadAction<{ roomId: number; blocked_by_me: boolean; has_blocked_me: boolean }>
+    ) => {
+      const { roomId, blocked_by_me, has_blocked_me } = action.payload;
+      const roomIndex = state.rooms.findIndex((r) => r.id === roomId);
+      if (roomIndex !== -1) {
+        state.rooms[roomIndex].blocked_by_me = blocked_by_me;
+        state.rooms[roomIndex].has_blocked_me = has_blocked_me;
+      }
+    },
+    addOrUpdateRoom: (state, action: PayloadAction<ChatRoom>) => {
+      const room = action.payload;
+      const index = state.rooms.findIndex((r) => r.id === room.id);
+      if (index !== -1) {
+        state.rooms[index] = { ...state.rooms[index], ...room };
+      } else {
+        state.rooms.push(room);
+      }
+    },
+    deleteMessage: (state, action: PayloadAction<{ roomId: number; messageId: number }>) => {
+      const { roomId, messageId } = action.payload;
+      if (state.messages[roomId]) {
+        state.messages[roomId] = state.messages[roomId].filter((m) => m.id !== messageId);
+      }
     },
     setMessages: (
       state,
@@ -162,6 +190,9 @@ export const {
   updatePollVote,
   updatePaymentStatus,
   setChatLoading,
+  updateBlockStatus,
+  addOrUpdateRoom,
+  deleteMessage,
 } = chatSlice.actions;
 
 export default chatSlice.reducer;

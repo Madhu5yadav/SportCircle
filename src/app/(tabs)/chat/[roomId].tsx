@@ -9,7 +9,9 @@ import {
   GestureDetector,
   Gesture,
   GestureHandlerRootView,
+  Swipeable
 } from "react-native-gesture-handler";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { 
   View, 
   Text, 
@@ -26,17 +28,24 @@ import {
   ScrollView,
   SafeAreaView,
   Keyboard,
-  StatusBar
+  StatusBar,
+  Share
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { useSelector, useDispatch } from "react-redux";
 import { Ionicons, FontAwesome, MaterialIcons } from "@expo/vector-icons";
 import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from "../../../theme/theme";
 import { RootState } from "../../../redux/store";
 import api from "../../../services/api";
-import { addMessage, setMessages, setActiveRoom } from "../../../redux/chatSlice";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { addMessage, setMessages, setActiveRoom, updateBlockStatus, addOrUpdateRoom, deleteMessage } from "../../../redux/chatSlice";
 import { SocketService } from "../../../services/socket";
 import { updateWallet } from "../../../redux/authSlice";
+
+const capitalizeFirstLetter = (str?: string) => {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+};
 
 const parseUTCDate = (dateStr: string): Date => {
   if (!dateStr) return new Date();
@@ -50,6 +59,7 @@ const parseUTCDate = (dateStr: string): Date => {
 export default function ChatRoomScreen() {
   const router = useRouter();
   const dispatch = useDispatch();
+  const insets = useSafeAreaInsets();
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
   const parsedRoomId = parseInt(roomId);
 
@@ -58,6 +68,7 @@ export default function ChatRoomScreen() {
   
   const messages = chatState.messages[parsedRoomId] || [];
   const typingUsers = chatState.typingUsers[parsedRoomId] || [];
+  const roomDetail = chatState.rooms.find(r => r.id === parsedRoomId);
 
   const flatListRef = useRef<FlatList>(null);
 
@@ -66,6 +77,8 @@ export default function ChatRoomScreen() {
   const [typing, setTyping] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [hiddenMessageIds, setHiddenMessageIds] = useState<number[]>([]);
+  const [replyingToMessage, setReplyingToMessage] = useState<any>(null);
   
   // Custom Modals
   const [showPollModal, setShowPollModal] = useState(false);
@@ -79,7 +92,6 @@ export default function ChatRoomScreen() {
   // Payment Form
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentTitle, setPaymentTitle] = useState("");
-  const [roomDetail, setRoomDetail] = useState<any>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [showImageSourceModal, setShowImageSourceModal] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
@@ -88,6 +100,25 @@ export default function ChatRoomScreen() {
 
   const openViewer = (url: string) => setViewerImageUrl(url);
   const closeViewer = () => setViewerImageUrl(null);
+
+  const navigation = useNavigation();
+
+  useEffect(() => {
+    // Hide the tab bar when entering the chat room
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.setOptions({ tabBarStyle: { display: 'none' } });
+    }
+    
+    // Restore the tab bar on unmount by clearing screen-specific overrides
+    return () => {
+      if (parent) {
+        parent.setOptions({
+          tabBarStyle: undefined
+        });
+      }
+    };
+  }, [navigation]);
 
   useEffect(() => {
     const showSubscription = Keyboard.addListener("keyboardDidShow", (e) => {
@@ -121,11 +152,12 @@ export default function ChatRoomScreen() {
   };
 
   const getCleanedGroupName = () => {
-    if (!roomDetail?.name) return `Chat Room #${parsedRoomId}`;
-    if (roomDetail.name.startsWith("Game: ")) {
+    if (!roomDetail) return `Chat Room #${parsedRoomId}`;
+    if (roomDetail.type === "direct") return `${roomDetail.name}`;
+    if (roomDetail.name && roomDetail.name.startsWith("Game: ")) {
       return roomDetail.name.substring(6);
     }
-    return roomDetail.name;
+    return roomDetail.name || `Chat Room #${parsedRoomId}`;
   };
 
   // Load chat profile and messages
@@ -134,11 +166,11 @@ export default function ChatRoomScreen() {
     try {
       try {
         const roomRes = await api.get(`/chat/room/${parsedRoomId}`);
-        setRoomDetail(roomRes.data);
+        dispatch(addOrUpdateRoom(roomRes.data));
       } catch (err) {
         console.log("Error loading room detail metadata:", err);
       }
-      const response = await api.get(`/messages?room_id=${parsedRoomId}`);
+      const response = await api.get(`/chat/room/${parsedRoomId}/messages`);
       // Parse JSON fields
       const formatted = response.data.map((m: any) => ({
         ...m,
@@ -170,9 +202,44 @@ export default function ChatRoomScreen() {
     };
   }, [roomId]);
 
+  useEffect(() => {
+    const loadHidden = async () => {
+      try {
+        const val = await AsyncStorage.getItem(`hidden_messages_${parsedRoomId}`);
+        if (val) {
+          setHiddenMessageIds(JSON.parse(val));
+        }
+      } catch (e) {}
+    };
+    loadHidden();
+  }, [roomId]);
+
+  const handleUnblockUser = async () => {
+    if (!roomDetail?.other_user_id) return;
+    try {
+      await api.post(`/user/unblock/${roomDetail.other_user_id}`);
+      dispatch(updateBlockStatus({
+        roomId: parsedRoomId,
+        blocked_by_me: false,
+        has_blocked_me: false
+      }));
+      Alert.alert("Success", "User unblocked successfully.");
+    } catch (e) {
+      Alert.alert("Error", "Could not unblock user.");
+    }
+  };
+
   const sendMessage = async (payload: any) => {
     if (isChatBlocked()) {
       Alert.alert("Chat Archived", "You cannot send messages to this room anymore.");
+      return;
+    }
+    if (roomDetail?.blocked_by_me) {
+      Alert.alert("Blocked", "Please unblock this user to send messages.");
+      return;
+    }
+    if (roomDetail?.has_blocked_me) {
+      Alert.alert("Blocked", "You cannot message this user.");
       return;
     }
     try {
@@ -185,10 +252,41 @@ export default function ChatRoomScreen() {
     }
   };
 
+  const getReplyTextSnippet = (message: any) => {
+    if (message.type === "text") {
+      if (message.content && message.content.startsWith('{"is_reply":true')) {
+        try {
+          const parsed = JSON.parse(message.content);
+          return parsed.text;
+        } catch (e) {
+          return message.content;
+        }
+      }
+      return message.content;
+    }
+    if (message.type === "image") return "Attachment: Image";
+    if (message.type === "poll") return `Poll: ${message.poll_question}`;
+    if (message.type === "payment") return `Payment Request: Rs. ${message.payment_amount}`;
+    return "Shared Attachment";
+  };
+
   const handleSendText = () => {
     if (!inputMessage.trim()) return;
+    
+    let contentVal = inputMessage.trim();
+    if (replyingToMessage) {
+      contentVal = JSON.stringify({
+        is_reply: true,
+        reply_to_id: replyingToMessage.id,
+        reply_to_username: replyingToMessage.sender_username,
+        reply_to_text: getReplyTextSnippet(replyingToMessage),
+        text: inputMessage.trim()
+      });
+      setReplyingToMessage(null);
+    }
+
     sendMessage({
-      content: inputMessage.trim(),
+      content: contentVal,
       type: "text"
     });
   };
@@ -379,35 +477,148 @@ export default function ChatRoomScreen() {
     ]);
   };
 
+  const handleMessageLongPress = (message: any) => {
+    const isOwn = message.sender_id === auth.user?.id;
+    
+    Alert.alert(
+      "Message Options",
+      undefined,
+      [
+        {
+          text: "Share Message",
+          onPress: () => {
+            Share.share({
+              message: message.content || "Image attachment"
+            }).catch(err => console.log("Error sharing:", err));
+          }
+        },
+        {
+          text: "Delete Message",
+          style: "destructive" as const,
+          onPress: () => {
+            Alert.alert(
+              "Delete Message",
+              isOwn 
+                ? "Are you sure you want to delete this message? This will delete it for everyone." 
+                : "Delete this message from your view?",
+              [
+                { text: "Cancel", style: "cancel" as const },
+                { 
+                  text: "Delete", 
+                  style: "destructive" as const,
+                  onPress: async () => {
+                    if (isOwn) {
+                      // Optimistically delete message on the frontend immediately
+                      dispatch(deleteMessage({ roomId: parsedRoomId, messageId: message.id }));
+                      try {
+                        await api.delete(`/chat/message/${message.id}`);
+                      } catch (err) {
+                        console.log("Failed to sync message deletion on backend:", err);
+                      }
+                    } else {
+                      try {
+                        const updated = [...hiddenMessageIds, message.id];
+                        setHiddenMessageIds(updated);
+                        await AsyncStorage.setItem(`hidden_messages_${parsedRoomId}`, JSON.stringify(updated));
+                        dispatch(deleteMessage({ roomId: parsedRoomId, messageId: message.id }));
+                      } catch (err) {
+                        Alert.alert("Error", "Could not delete message locally.");
+                      }
+                    }
+                  }
+                }
+              ]
+            );
+          }
+        },
+        { text: "Cancel", style: "cancel" as const }
+      ]
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: COLORS.surface }]}>
       {/* Header bar */}
-      <View style={styles.chatHeader}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
+      <View style={[styles.chatHeader, { backgroundColor: COLORS.primary }]}>
+        <TouchableOpacity 
+          style={styles.backBtn} 
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.push("/(tabs)/chat");
+            }
+          }}
+        >
+          <Ionicons name="arrow-back" size={24} color={COLORS.surface} />
         </TouchableOpacity>
-        
+
         <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {getCleanedGroupName()}
-          </Text>
-          <Text style={styles.headerSub}>
-            {typingUsers.length > 0 
-              ? `${typingUsers.map(u => u.username).join(", ")} typing...`
-              : "Active Team Group"}
-          </Text>
+          {roomDetail?.type === "direct" && (
+            <TouchableOpacity 
+              style={styles.headerProfileBtn}
+              onPress={() => {
+                router.push({ pathname: "/chat-info/[roomId]", params: { roomId: parsedRoomId } });
+              }}
+            >
+              <Image 
+                source={{ uri: roomDetail.other_user_profile_pic || "https://cdn-icons-png.flaticon.com/512/149/149071.png" }} 
+                style={styles.headerAvatar}
+              />
+              <View style={styles.headerTextGroup}>
+                <Text style={[styles.headerTitle, { color: COLORS.surface }]} numberOfLines={1}>
+                  {capitalizeFirstLetter(getCleanedGroupName())}
+                </Text>
+                {typingUsers.length > 0 && (
+                  <Text style={[styles.headerSub, { color: 'rgba(255,255,255,0.8)' }]}>
+                    {typingUsers.map(u => capitalizeFirstLetter(u.username)).join(", ")} typing...
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {roomDetail?.type !== "direct" && (
+            <TouchableOpacity 
+              style={styles.headerProfileBtn}
+              onPress={() => {
+                router.push({ pathname: "/chat-info/[roomId]", params: { roomId: parsedRoomId } });
+              }}
+            >
+              <View style={styles.headerTextGroup}>
+                <Text style={[styles.headerTitle, { color: COLORS.surface }]} numberOfLines={1}>
+                  {capitalizeFirstLetter(getCleanedGroupName())}
+                </Text>
+                <Text style={[styles.headerSub, { color: 'rgba(255,255,255,0.8)' }]}>
+                  {typingUsers.length > 0 
+                    ? `${typingUsers.map(u => capitalizeFirstLetter(u.username)).join(", ")} typing...`
+                    : roomDetail?.type === "squad" 
+                      ? "Active Team Group" 
+                      : "Active Game Group"}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          )}
         </View>
 
-        <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={styles.headerMenuBtn}>
-          <Ionicons name="ellipsis-vertical" size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
+        {roomDetail?.type !== "direct" && (
+          <TouchableOpacity onPress={() => setShowMenu(!showMenu)} style={styles.headerMenuBtn}>
+            <Ionicons name="ellipsis-vertical" size={22} color={COLORS.surface} />
+          </TouchableOpacity>
+        )}
 
         {/* Dropdown Menu */}
         {showMenu && (
           <View style={styles.menuDropdown}>
-            <TouchableOpacity style={styles.menuItem} onPress={handleViewRoster}>
-              <Ionicons name="people-outline" size={18} color={COLORS.textPrimary} />
-              <Text style={styles.menuText}>View Team Roster</Text>
+            <TouchableOpacity 
+              style={styles.menuItem} 
+              onPress={() => {
+                setShowMenu(false);
+                router.push({ pathname: "/chat-info/[roomId]", params: { roomId: parsedRoomId } });
+              }}
+            >
+              <Ionicons name="information-circle-outline" size={18} color={COLORS.textPrimary} />
+              <Text style={styles.menuText}>Group Details</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={handleExitGroup}>
               <Ionicons name="exit-outline" size={18} color={COLORS.error} />
@@ -434,7 +645,7 @@ export default function ChatRoomScreen() {
         ) : (
           <FlatList
             ref={flatListRef}
-            data={messages}
+            data={messages.filter((m: any) => !hiddenMessageIds.includes(m.id))}
             keyExtractor={(item) => item.id.toString()}
             contentContainerStyle={styles.messageScroll}
             keyboardShouldPersistTaps="handled"
@@ -443,31 +654,85 @@ export default function ChatRoomScreen() {
             renderItem={({ item }) => {
               const isOwn = item.sender_id === auth.user?.id;
               
+              let swipeableRef: Swipeable | null = null;
+              
+              const renderLeftActions = () => {
+                return (
+                  <View style={styles.replySwipeAction}>
+                    <Ionicons name="arrow-undo-outline" size={22} color={COLORS.primary} />
+                  </View>
+                );
+              };
+
               return (
-                <View style={[
-                  styles.bubbleWrapper, 
-                  isOwn ? styles.bubbleOwnWrapper : styles.bubbleOtherWrapper,
-                  item.type === "image" ? { maxWidth: "88%" } : null
-                ]}>
+                <Swipeable
+                  ref={(ref) => { swipeableRef = ref; }}
+                  renderLeftActions={renderLeftActions}
+                  onSwipeableLeftOpen={() => {
+                    setReplyingToMessage(item);
+                    swipeableRef?.close();
+                  }}
+                  friction={2}
+                  leftThreshold={45}
+                >
+                  <View style={[
+                    styles.bubbleWrapper, 
+                    isOwn ? styles.bubbleOwnWrapper : styles.bubbleOtherWrapper,
+                    item.type === "image" ? { maxWidth: "88%" } : null
+                  ]}>
                   {/* Sender metadata */}
                   {!isOwn && (
                     <TouchableOpacity onPress={() => router.push({ pathname: "/user-profile", params: { userId: item.sender_id } })}>
-                      <Text style={styles.senderName}>@{item.sender_username}</Text>
+                      <Text style={styles.senderName}>@{capitalizeFirstLetter(item.sender_username)}</Text>
                     </TouchableOpacity>
                   )}
                   
                   {/* Bubble Surface */}
-                  <View style={[
-                    styles.bubble, 
-                    isOwn ? styles.bubbleOwn : styles.bubbleOther,
-                    item.type === "poll" || item.type === "payment" ? styles.specialBubble : null,
-                    item.type === "image" ? { padding: 4 } : null
-                  ]}>
+                  <TouchableOpacity 
+                    activeOpacity={0.95} 
+                    onLongPress={() => handleMessageLongPress(item)} 
+                    style={[
+                      styles.bubble, 
+                      isOwn ? styles.bubbleOwn : styles.bubbleOther,
+                      item.type === "poll" || item.type === "payment" ? styles.specialBubble : null,
+                      item.type === "image" ? { padding: 4 } : null
+                    ]}
+                  >
                     
                     {/* Media Type Handler */}
-                    {item.type === "text" && (
-                      <Text style={[styles.msgText, isOwn ? styles.msgOwnText : null]}>{item.content}</Text>
-                    )}
+                    {item.type === "text" && (() => {
+                       const isReplyJSON = item.content && item.content.startsWith('{"is_reply":true');
+                       let replyData = null;
+                       let mainText = item.content;
+
+                       if (isReplyJSON) {
+                         try {
+                           replyData = JSON.parse(item.content);
+                           mainText = replyData.text;
+                         } catch (e) {
+                           // Fallback
+                         }
+                       }
+
+                       return (
+                         <View>
+                           {replyData && (
+                             <View style={[
+                               styles.bubbleReplyQuoteBox,
+                               isOwn ? styles.bubbleReplyQuoteBoxOwn : styles.bubbleReplyQuoteBoxOther
+                             ]}>
+                               <Text style={[styles.replyQuoteUser, isOwn ? styles.replyQuoteUserOwn : null]} numberOfLines={1}>
+                                 @{capitalizeFirstLetter(replyData.reply_to_username)}
+                               </Text>
+                               <Text style={[styles.replyQuoteText, isOwn ? styles.replyQuoteTextOwn : null]} numberOfLines={1}>
+                                 {replyData.reply_to_text}
+                               </Text>
+                             </View>
+                           )}
+                           <Text style={[styles.msgText, isOwn ? styles.msgOwnText : null]}>{mainText}</Text>
+                         </View>
+                       );
+                     })()}
 
                     {item.type === "image" && (
                       <TouchableOpacity 
@@ -566,12 +831,54 @@ export default function ChatRoomScreen() {
                       </View>
                     )}
 
+                    {item.type.startsWith("shared_") && (
+                      <View style={[styles.paymentCard, { borderColor: COLORS.primary }]}>
+                        <View style={styles.paymentHeader}>
+                          <Ionicons 
+                            name={item.type === "shared_profile" ? "person-outline" : item.type === "shared_game" ? "football-outline" : "location-outline"} 
+                            size={24} 
+                            color={COLORS.primary} 
+                          />
+                          <View style={{ marginLeft: 10 }}>
+                            <Text style={styles.paymentTitle}>
+                              Shared {item.type.replace("shared_", "").charAt(0).toUpperCase() + item.type.replace("shared_", "").slice(1)}
+                            </Text>
+                            <Text style={styles.paymentAmount}>
+                              {(() => {
+                                try {
+                                  return JSON.parse(item.content).title;
+                                } catch (e) {
+                                  return "Unknown";
+                                }
+                              })()}
+                            </Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.paymentPayBtn, { marginTop: 10 }]}
+                          onPress={() => {
+                            try {
+                              const shared = JSON.parse(item.content);
+                              if (item.type === "shared_profile") router.push({ pathname: "/user-profile", params: { userId: shared.id } });
+                              if (item.type === "shared_game") router.push({ pathname: "/(tabs)/explore", params: { gameId: shared.id } });
+                              if (item.type === "shared_venue") router.push({ pathname: "/(tabs)/booking", params: { venueId: shared.id } });
+                            } catch (e) {
+                              Alert.alert("Error", "Invalid link");
+                            }
+                          }}
+                        >
+                          <Text style={styles.paymentPayBtnText}>View</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
                     {/* Time Stamp */}
                     <Text style={[styles.msgTime, isOwn ? styles.msgOwnTime : null]}>
                       {parseUTCDate(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </Text>
+                  </TouchableOpacity>
                   </View>
-                </View>
+                </Swipeable>
               );
             }}
           />
@@ -613,14 +920,50 @@ export default function ChatRoomScreen() {
           </View>
         )}
 
+        {/* Reply Preview */}
+        {replyingToMessage && (
+          <View style={styles.replyPreviewContainer}>
+            <View style={styles.replyPreviewLeftBar} />
+            <View style={styles.replyPreviewContent}>
+              <Text style={styles.replyPreviewUser}>
+                Replying to @{capitalizeFirstLetter(replyingToMessage.sender_username)}
+              </Text>
+              <Text style={styles.replyPreviewText} numberOfLines={1}>
+                {getReplyTextSnippet(replyingToMessage)}
+              </Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.replyPreviewCloseBtn} 
+              onPress={() => setReplyingToMessage(null)}
+            >
+              <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Input Bar or Blocked Banner */}
         {isChatBlocked() ? (
-          <View style={styles.blockedBar}>
+          <View style={[styles.blockedBar, { paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 16 }]}>
             <Ionicons name="lock-closed" size={20} color={COLORS.textSecondary} style={{ marginRight: 8 }} />
             <Text style={styles.blockedText}>Chatting is closed as this game started more than 10 minutes ago.</Text>
           </View>
+        ) : roomDetail?.blocked_by_me ? (
+          <View style={[styles.blockedBar, { paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 16 }]}>
+            <Ionicons name="ban-outline" size={20} color={COLORS.error} style={{ marginRight: 8 }} />
+            <Text style={styles.blockedText}>
+              You blocked this user.{" "}
+              <Text style={{ color: COLORS.primary, fontWeight: 'bold', textDecorationLine: 'underline' }} onPress={handleUnblockUser}>
+                Unblock
+              </Text>
+            </Text>
+          </View>
+        ) : roomDetail?.has_blocked_me ? (
+          <View style={[styles.blockedBar, { paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 16 }]}>
+            <Ionicons name="ban-outline" size={20} color={COLORS.textSecondary} style={{ marginRight: 8 }} />
+            <Text style={styles.blockedText}>You cannot message this user.</Text>
+          </View>
         ) : (
-          <View style={styles.inputBar}>
+          <View style={[styles.inputBar, { paddingBottom: insets.bottom > 0 ? insets.bottom + 4 : 12 }]}>
             <TouchableOpacity 
               style={styles.attachmentBtn} 
               onPress={() => setShowAttachmentMenu(!showAttachmentMenu)}
@@ -997,11 +1340,25 @@ const styles = StyleSheet.create({
     ...SHADOWS.soft,
   },
   backBtn: {
-    padding: 6,
+    padding: SPACING.xs,
   },
   headerInfo: {
     flex: 1,
-    marginLeft: 8,
+    marginLeft: SPACING.md,
+  },
+  headerProfileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: SPACING.sm,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  headerTextGroup: {
+    flex: 1,
   },
   headerTitle: {
     fontFamily: "Poppins_600SemiBold",
@@ -1614,5 +1971,81 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.55)",
     borderRadius: 24,
     padding: 8,
+  },
+  
+  // ── Swipe to Reply Styles ──────────────────────────────
+  replySwipeAction: {
+    justifyContent: "center",
+    alignItems: "center",
+    width: 60,
+    paddingLeft: 16,
+  },
+  replyPreviewContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F5F5F5",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  replyPreviewLeftBar: {
+    width: 4,
+    height: "100%",
+    backgroundColor: COLORS.primary,
+    borderRadius: 2,
+  },
+  replyPreviewContent: {
+    flex: 1,
+    paddingLeft: 12,
+  },
+  replyPreviewUser: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: COLORS.primary,
+  },
+  replyPreviewText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  replyPreviewCloseBtn: {
+    padding: 4,
+  },
+  
+  // ── Bubble Reply Quote Styles ──────────────────────────
+  bubbleReplyQuoteBox: {
+    borderLeftWidth: 3.5,
+    paddingLeft: 10,
+    paddingVertical: 5,
+    marginBottom: 6,
+    borderRadius: 4,
+    width: "100%",
+  },
+  bubbleReplyQuoteBoxOwn: {
+    borderLeftColor: COLORS.surface,
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  bubbleReplyQuoteBoxOther: {
+    borderLeftColor: COLORS.primary,
+    backgroundColor: "rgba(0,0,0,0.05)",
+  },
+  replyQuoteUser: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 12,
+    color: COLORS.primary,
+  },
+  replyQuoteUserOwn: {
+    color: COLORS.surface,
+  },
+  replyQuoteText: {
+    fontFamily: "Poppins_400Regular",
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  replyQuoteTextOwn: {
+    color: "rgba(255,255,255,0.8)",
   },
 });

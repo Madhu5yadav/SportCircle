@@ -207,7 +207,7 @@ export default function JoinGameWebScreen() {
                   <Text style={styles.gameDate}><Ionicons name="calendar-outline" /> {item.game_date} • {item.start_time.slice(0,5)}</Text>
                   
                   <View style={styles.gameFooter}>
-                    <Text style={styles.slotsInfo}>{item.joined_count}/{item.player_count} Players ({slotsRemaining} slots remaining)</Text>
+                    <Text style={styles.slotsInfo}>{item.joined_count}/{item.player_count} Players ({slotsRemaining < 0 ? `${item.joined_count - item.player_count} on waiting list` : `${slotsRemaining} slots remaining`})</Text>
                     <TouchableOpacity
                       style={[
                         styles.actionBtn, 

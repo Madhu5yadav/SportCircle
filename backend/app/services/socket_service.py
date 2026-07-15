@@ -156,3 +156,13 @@ async def broadcast_game_joined_update(game_id: int, joined_count: int, max_coun
             "slotsRemaining": max(0, max_count - joined_count)
         }
     )
+
+
+# Helper function to emit new message alert toast to user
+async def emit_new_message_alert(user_id: int, room_id: int, title: str, message: str):
+    payload = {
+        "roomId": room_id,
+        "title": title,
+        "message": message
+    }
+    await sio.emit("new_message_alert", payload, to=f"user_{user_id}")

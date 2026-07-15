@@ -17,6 +17,7 @@ import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from "../theme/theme";
 import { RootState } from "../redux/store";
 import api from "../services/api";
 import { setGames } from "../redux/gameSlice";
+import ShareModal, { ShareData } from "../components/ShareModal";
 
 const { width, height } = Dimensions.get("window");
 
@@ -41,6 +42,9 @@ export default function JoinGameScreen() {
   const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareData, setShareData] = useState<ShareData | null>(null);
 
   // Default region: user's location or Bangalore default
   const [region, setRegion] = useState({
@@ -147,7 +151,7 @@ export default function JoinGameScreen() {
                   <Callout tooltip onPress={() => router.push({ pathname: "/(tabs)/explore", params: { gameId: g.id } })}>
                     <View style={styles.calloutCard}>
                       <Text style={styles.calloutTitle}>{g.name}</Text>
-                      <Text style={styles.calloutSubtitle}>{g.sport_type} • {g.joined_count}/{g.player_count} Joined</Text>
+                      <Text style={styles.calloutSubtitle}>{g.sport_type} • {g.joined_count}/{g.player_count} Joined{g.waiting_count > 0 ? ` (${g.waiting_count} waiting)` : ""}</Text>
                       <Text style={styles.calloutAction}>Tap to view details</Text>
                     </View>
                   </Callout>
@@ -197,22 +201,39 @@ export default function JoinGameScreen() {
                   <Text style={styles.gameDate}><Ionicons name="calendar-outline" /> {item.game_date} • {item.start_time.slice(0,5)}</Text>
                   
                   <View style={styles.gameFooter}>
-                    <Text style={styles.slotsInfo}>{item.joined_count}/{item.player_count} Players ({slotsRemaining} slots remaining)</Text>
-                    <TouchableOpacity
-                      style={[
-                        styles.actionBtn, 
-                        isJoined ? styles.btnLeave : styles.btnJoin,
-                        actionLoading === item.id ? styles.btnDisabled : null
-                      ]}
-                      onPress={() => handleAction(item.id, !!isJoined)}
-                      disabled={actionLoading === item.id}
-                    >
-                      {actionLoading === item.id ? (
-                        <ActivityIndicator color={COLORS.surface} size="small" />
-                      ) : (
-                        <Text style={styles.actionBtnText}>{isJoined ? "Leave" : "Join"}</Text>
-                      )}
-                    </TouchableOpacity>
+                    <Text style={styles.slotsInfo}>{item.joined_count}/{item.player_count} Players ({slotsRemaining < 0 ? `${item.joined_count - item.player_count} on waiting list` : `${slotsRemaining} slots remaining`})</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { backgroundColor: COLORS.surface, borderWidth: 1.5, borderColor: COLORS.primary }]}
+                        onPress={() => {
+                          setShareData({
+                            type: 'game',
+                            id: item.id,
+                            title: item.name
+                          });
+                          setShowShareModal(true);
+                        }}
+                      >
+                        <Ionicons name="share-outline" size={16} color={COLORS.primary} />
+                        <Text style={[styles.actionBtnText, { color: COLORS.primary, marginLeft: 4 }]}>Share</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.actionBtn, 
+                          isJoined ? styles.btnLeave : styles.btnJoin,
+                          actionLoading === item.id ? styles.btnDisabled : null,
+                          { flex: 1 }
+                        ]}
+                        onPress={() => handleAction(item.id, !!isJoined)}
+                        disabled={actionLoading === item.id}
+                      >
+                        {actionLoading === item.id ? (
+                          <ActivityIndicator color={COLORS.surface} size="small" />
+                        ) : (
+                          <Text style={styles.actionBtnText}>{isJoined ? "Leave" : "Join"}</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               );
@@ -220,6 +241,12 @@ export default function JoinGameScreen() {
           />
         )
       )}
+
+      <ShareModal
+        isVisible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        shareData={shareData}
+      />
     </View>
   );
 }

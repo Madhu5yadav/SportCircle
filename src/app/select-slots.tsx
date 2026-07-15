@@ -737,34 +737,78 @@ export default function SelectSlotsScreen() {
                 </Text>
 
                 <ScrollView style={styles.playerListScroll} showsVerticalScrollIndicator={false}>
-                  {selectedGame.participants.map((player: any) => {
-                    const isChecked = selectedPlayersForSplit.includes(player.user_id);
-                    const isCurrentUser = player.user_id === auth.user?.id;
+                  {(() => {
+                    const fixedPlayers = (selectedGame.participants || []).filter((p: any) => p.status !== "waiting");
+                    const waitingPlayers = (selectedGame.participants || []).filter((p: any) => p.status === "waiting");
+                    
                     return (
-                      <TouchableOpacity 
-                        key={player.user_id}
-                        style={styles.playerRow}
-                        disabled={isCurrentUser}
-                        onPress={() => {
-                          if (isChecked) {
-                            setSelectedPlayersForSplit(selectedPlayersForSplit.filter(id => id !== player.user_id));
-                          } else {
-                            setSelectedPlayersForSplit([...selectedPlayersForSplit, player.user_id]);
-                          }
-                        }}
-                      >
-                        <View style={styles.playerInfo}>
-                          <Ionicons name="person-circle-outline" size={24} color={COLORS.textSecondary} />
-                          <Text style={styles.playerName}>{player.username} {isCurrentUser ? "(You)" : ""}</Text>
-                        </View>
-                        <Ionicons 
-                          name={isChecked ? "checkbox" : "square-outline"} 
-                          size={24} 
-                          color={isCurrentUser ? COLORS.textSecondary : COLORS.primary} 
-                        />
-                      </TouchableOpacity>
+                      <>
+                        <Text style={{ fontFamily: "Poppins_600SemiBold", fontSize: 12, color: COLORS.textSecondary, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>Fixed Players</Text>
+                        {fixedPlayers.map((player: any) => {
+                          const isChecked = selectedPlayersForSplit.includes(player.user_id);
+                          const isCurrentUser = player.user_id === auth.user?.id;
+                          return (
+                            <TouchableOpacity 
+                              key={player.user_id}
+                              style={styles.playerRow}
+                              disabled={isCurrentUser}
+                              onPress={() => {
+                                if (isChecked) {
+                                  setSelectedPlayersForSplit(selectedPlayersForSplit.filter(id => id !== player.user_id));
+                                } else {
+                                  setSelectedPlayersForSplit([...selectedPlayersForSplit, player.user_id]);
+                                }
+                              }}
+                            >
+                              <View style={styles.playerInfo}>
+                                <Ionicons name="person-circle-outline" size={24} color={COLORS.textSecondary} />
+                                <Text style={styles.playerName}>{player.username} {isCurrentUser ? "(You)" : ""}</Text>
+                              </View>
+                              <Ionicons 
+                                name={isChecked ? "checkbox" : "square-outline"} 
+                                size={24} 
+                                color={isCurrentUser ? COLORS.textSecondary : COLORS.primary} 
+                              />
+                            </TouchableOpacity>
+                          );
+                        })}
+
+                        {waitingPlayers.length > 0 && (
+                          <>
+                            <Text style={{ fontFamily: "Poppins_600SemiBold", fontSize: 12, color: "#FB8C00", marginTop: 20, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>Waiting List Players</Text>
+                            {waitingPlayers.map((player: any) => {
+                              const isChecked = selectedPlayersForSplit.includes(player.user_id);
+                              const isCurrentUser = player.user_id === auth.user?.id;
+                              return (
+                                <TouchableOpacity 
+                                  key={player.user_id}
+                                  style={styles.playerRow}
+                                  disabled={isCurrentUser}
+                                  onPress={() => {
+                                    if (isChecked) {
+                                      setSelectedPlayersForSplit(selectedPlayersForSplit.filter(id => id !== player.user_id));
+                                    } else {
+                                      setSelectedPlayersForSplit([...selectedPlayersForSplit, player.user_id]);
+                                    }
+                                  }}
+                                >
+                                  <View style={styles.playerInfo}>
+                                    <Ionicons name="person-circle-outline" size={24} color="#FB8C00" />
+                                    <Text style={styles.playerName}>{player.username} {isCurrentUser ? "(You)" : ""}</Text>
+                                  </View>
+                                  <Ionicons 
+                                    name={isChecked ? "checkbox" : "square-outline"} 
+                                    size={24} 
+                                    color={isCurrentUser ? COLORS.textSecondary : "#FB8C00"} 
+                                  />
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </>
+                        )}
+                      </>
                     );
-                  })}
+                  })()}
                 </ScrollView>
 
                 <View style={styles.splitFooter}>

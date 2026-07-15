@@ -10,10 +10,11 @@ import uuid
 from decimal import Decimal
 
 from app.database.db import get_db
-from app.models.models import User, ChatRoom, Message, Participant, SquadMember, Wallet, PaymentHistory
+from app.models.models import User, ChatRoom, Message, Participant, SquadMember, Wallet, PaymentHistory, UserBlock
 from app.schemas.schemas import ChatRoomResponse, MessageResponse, MessageCreate, PollVoteRequest, PaymentStatusUpdateRequest
 from app.middleware.auth import get_current_user
-from app.services.socket_service import broadcast_chat_message, sio
+from app.services.socket_service import broadcast_chat_message, sio, emit_new_message_alert
+from app.services.notification_service import NotificationService
 
 router = APIRouter(tags=["Chat"])
 
@@ -30,7 +31,13 @@ def get_chat_rooms(
     joined_squads = db.query(SquadMember.squad_id).filter(SquadMember.user_id == current_user.id).subquery()
     squad_rooms = db.query(ChatRoom).filter(ChatRoom.squad_id.in_(joined_squads)).all()
     
-    all_rooms = game_rooms + squad_rooms
+    # 3. Find all direct rooms user is part of
+    direct_rooms = db.query(ChatRoom).filter(
+        ChatRoom.type == "direct",
+        or_(ChatRoom.user1_id == current_user.id, ChatRoom.user2_id == current_user.id)
+    ).all()
+    
+    all_rooms = game_rooms + squad_rooms + direct_rooms
     # Sort rooms by creation time in descending order (newest first)
     all_rooms.sort(key=lambda r: r.created_at or datetime.min, reverse=True)
     
@@ -57,10 +64,26 @@ def get_chat_rooms(
                 type=last_msg.type,
                 created_at=last_msg.created_at
             )
-            
+        
+        # Determine the name of the direct room based on the other user
+        room_name = r.name
+        other_u_id = None
+        other_u_pic = None
+        blocked_by_me = False
+        has_blocked_me = False
+        if r.type == "direct":
+            other_user_id = r.user1_id if r.user1_id != current_user.id else r.user2_id
+            other_user = db.query(User).filter(User.id == other_user_id).first()
+            if other_user:
+                room_name = other_user.username
+                other_u_id = other_user.id
+                other_u_pic = other_user.profile_pic
+                blocked_by_me = db.query(UserBlock).filter(UserBlock.blocker_id == current_user.id, UserBlock.blocked_id == other_user_id).first() is not None
+                has_blocked_me = db.query(UserBlock).filter(UserBlock.blocker_id == other_user_id, UserBlock.blocked_id == current_user.id).first() is not None
+                
         rooms_response.append(ChatRoomResponse(
             id=r.id,
-            name=r.name,
+            name=room_name,
             type=r.type,
             game_id=r.game_id,
             squad_id=r.squad_id,
@@ -68,9 +91,20 @@ def get_chat_rooms(
             last_message=last_msg_res,
             game_date=r.game.game_date if (r.game_id and r.game) else None,
             start_time=r.game.start_time if (r.game_id and r.game) else None,
-            end_time=r.game.end_time if (r.game_id and r.game) else None
+            end_time=r.game.end_time if (r.game_id and r.game) else None,
+            other_user_id=other_u_id,
+            other_user_profile_pic=other_u_pic,
+            blocked_by_me=blocked_by_me,
+            has_blocked_me=has_blocked_me
         ))
         
+    # Sort rooms by last message time (or room creation time if no messages)
+    def get_sort_key(room_res):
+        if room_res.last_message:
+            return room_res.last_message.created_at
+        return room_res.created_at
+
+    rooms_response.sort(key=get_sort_key, reverse=True)
     return rooms_response
 
 
@@ -96,6 +130,8 @@ def get_chat_room(
             SquadMember.squad_id == room.squad_id,
             SquadMember.user_id == current_user.id
         ).first() is not None
+    elif room.type == "direct":
+        is_authorized = (room.user1_id == current_user.id or room.user2_id == current_user.id)
         
     if not is_authorized:
         raise HTTPException(
@@ -124,9 +160,24 @@ def get_chat_room(
             created_at=last_msg.created_at
         )
         
+    room_name = room.name
+    other_u_id = None
+    other_u_pic = None
+    blocked_by_me = False
+    has_blocked_me = False
+    if room.type == "direct":
+        other_user_id = room.user1_id if room.user1_id != current_user.id else room.user2_id
+        other_user = db.query(User).filter(User.id == other_user_id).first()
+        if other_user:
+            room_name = other_user.username
+            other_u_id = other_user.id
+            other_u_pic = other_user.profile_pic
+            blocked_by_me = db.query(UserBlock).filter(UserBlock.blocker_id == current_user.id, UserBlock.blocked_id == other_user_id).first() is not None
+            has_blocked_me = db.query(UserBlock).filter(UserBlock.blocker_id == other_user_id, UserBlock.blocked_id == current_user.id).first() is not None
+
     return ChatRoomResponse(
         id=room.id,
-        name=room.name,
+        name=room_name,
         type=room.type,
         game_id=room.game_id,
         squad_id=room.squad_id,
@@ -134,11 +185,53 @@ def get_chat_room(
         last_message=last_msg_res,
         game_date=room.game.game_date if (room.game_id and room.game) else None,
         start_time=room.game.start_time if (room.game_id and room.game) else None,
-        end_time=room.game.end_time if (room.game_id and room.game) else None
+        end_time=room.game.end_time if (room.game_id and room.game) else None,
+        other_user_id=other_u_id,
+        other_user_profile_pic=other_u_pic,
+        blocked_by_me=blocked_by_me,
+        has_blocked_me=has_blocked_me
     )
 
 
-@router.get("/messages", response_model=List[MessageResponse])
+@router.post("/chat/direct/{friend_id}", response_model=ChatRoomResponse)
+def get_or_create_direct_room(
+    friend_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.id == friend_id:
+        raise HTTPException(status_code=400, detail="Cannot create direct chat with yourself")
+
+    friend = db.query(User).filter(User.id == friend_id).first()
+    if not friend:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check if a direct room already exists
+    existing_room = db.query(ChatRoom).filter(
+        ChatRoom.type == "direct",
+        or_(
+            and_(ChatRoom.user1_id == current_user.id, ChatRoom.user2_id == friend_id),
+            and_(ChatRoom.user1_id == friend_id, ChatRoom.user2_id == current_user.id)
+        )
+    ).first()
+
+    if existing_room:
+        return get_chat_room(existing_room.id, current_user, db)
+
+    # Create a new direct chat room
+    new_room = ChatRoom(
+        type="direct",
+        user1_id=current_user.id,
+        user2_id=friend_id
+    )
+    db.add(new_room)
+    db.commit()
+    db.refresh(new_room)
+
+    return get_chat_room(new_room.id, current_user, db)
+
+
+@router.get("/chat/room/{room_id}/messages", response_model=List[MessageResponse])
 def get_room_messages(
     room_id: int,
     current_user: User = Depends(get_current_user),
@@ -161,6 +254,8 @@ def get_room_messages(
             SquadMember.squad_id == room.squad_id,
             SquadMember.user_id == current_user.id
         ).first() is not None
+    elif room.type == "direct":
+        is_authorized = (room.user1_id == current_user.id or room.user2_id == current_user.id)
         
     if not is_authorized:
         raise HTTPException(
@@ -208,6 +303,20 @@ async def post_message(
     if not room:
         raise HTTPException(status_code=404, detail="Chat room not found")
         
+    if room.type == "direct":
+        other_user_id = room.user1_id if room.user1_id != current_user.id else room.user2_id
+        is_blocked = db.query(UserBlock).filter(
+            or_(
+                and_(UserBlock.blocker_id == current_user.id, UserBlock.blocked_id == other_user_id),
+                and_(UserBlock.blocker_id == other_user_id, UserBlock.blocked_id == current_user.id)
+            )
+        ).first() is not None
+        if is_blocked:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot send message. User is blocked."
+            )
+
     # Block chat if 10 mins past game start time
     if room.game_id and room.game:
         game_start_dt = datetime.combine(room.game.game_date, room.game.start_time)
@@ -278,6 +387,52 @@ async def post_message(
         "created_at": res.created_at.isoformat()
     })
     
+    # Send notifications to other users in this room
+    body_summary = "attachment"
+    if msg_in.type == "text":
+        body_summary = msg_in.content
+    elif msg_in.type == "image":
+        body_summary = "sent an image"
+    elif msg_in.type == "poll":
+        body_summary = f"created a poll: {msg_in.poll_question}"
+    elif msg_in.type == "payment":
+        body_summary = "sent a payment request"
+    elif msg_in.type.startswith("shared_"):
+        body_summary = f"shared a {msg_in.type.split('_')[1]}"
+
+    receivers = []
+    sender_cap = current_user.username.capitalize()
+    if room.type == "direct":
+        other_user_id = room.user1_id if room.user1_id != current_user.id else room.user2_id
+        receivers.append((other_user_id, sender_cap, body_summary))
+    elif room.game_id:
+        game_participants = db.query(Participant.user_id).filter(
+            Participant.game_id == room.game_id,
+            Participant.user_id != current_user.id
+        ).all()
+        group_name = room.name.replace("Game: ", "") if room.name else "Game Group"
+        for p in game_participants:
+            receivers.append((p[0], group_name, f"{sender_cap}: {body_summary}"))
+    elif room.squad_id:
+        squad_members = db.query(SquadMember.user_id).filter(
+            SquadMember.squad_id == room.squad_id,
+            SquadMember.user_id != current_user.id,
+            SquadMember.status == "accepted"
+        ).all()
+        for m in squad_members:
+            receivers.append((m[0], room.name or "Squad Group", f"{sender_cap}: {body_summary}"))
+
+    for rx_id, title, msg_text in receivers:
+        try:
+            await emit_new_message_alert(
+                user_id=rx_id,
+                room_id=room_id,
+                title=title,
+                message=msg_text
+            )
+        except Exception as e:
+            print(f"Failed to send real-time message alert: {e}")
+            
     return res
 
 
@@ -444,3 +599,35 @@ async def upload_chat_image(
     url = f"{base_url}/uploads/{filename}"
 
     return {"url": url}
+
+
+@router.delete("/chat/message/{message_id}")
+def delete_message(
+    message_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    msg = db.query(Message).filter(Message.id == message_id).first()
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if msg.sender_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You can only delete your own messages")
+    
+    room_id = msg.chat_room_id
+    db.delete(msg)
+    db.commit()
+    
+    # Broadcast deletion via Socket.IO
+    try:
+        from app.services.socket_service import sio
+        import asyncio
+        loop = asyncio.get_event_loop()
+        payload = {"message_id": message_id, "room_id": room_id}
+        if loop.is_running():
+            asyncio.ensure_future(sio.emit("message_deleted", payload, room=f"chat_{room_id}"))
+        else:
+            loop.run_until_complete(sio.emit("message_deleted", payload, room=f"chat_{room_id}"))
+    except Exception as e:
+        print(f"Failed to broadcast message deletion: {e}")
+        
+    return {"status": "success", "message_id": message_id}

@@ -22,6 +22,7 @@ import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from "../../../theme/theme";
 import { RootState } from "../../../redux/store";
 import api from "../../../services/api";
 import { updateWallet } from "../../../redux/authSlice";
+import ShareModal, { ShareData } from "../../../components/ShareModal";
 
 const { width } = Dimensions.get("window");
 
@@ -32,6 +33,8 @@ export default function BookingScreen() {
   const auth = useSelector((state: RootState) => state.auth);
 
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareData, setShareData] = useState<ShareData | null>(null);
   const [selectedHistoryBooking, setSelectedHistoryBooking] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -584,7 +587,22 @@ export default function BookingScreen() {
           {/* Main Venue Details Card */}
           <View style={styles.detailCard}>
             <View style={styles.detailHeader}>
-              <Text style={styles.detailName}>{selectedVenue.name}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                <Text style={styles.detailName}>{selectedVenue.name}</Text>
+                <TouchableOpacity
+                  style={{ marginLeft: 8 }}
+                  onPress={() => {
+                    setShareData({
+                      type: 'venue',
+                      id: selectedVenue.id,
+                      title: selectedVenue.name
+                    });
+                    setShowShareModal(true);
+                  }}
+                >
+                  <Ionicons name="share-outline" size={20} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
               <View style={styles.detailRating}>
                 <Ionicons name="star" size={14} color="#FFD700" />
                 <Text style={styles.ratingTextVertical}>{selectedVenue.rating}</Text>
@@ -945,6 +963,12 @@ export default function BookingScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      <ShareModal
+        isVisible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        shareData={shareData}
+      />
     </View>
   );
 }

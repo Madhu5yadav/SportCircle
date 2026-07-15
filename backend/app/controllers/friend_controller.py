@@ -5,8 +5,8 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.database.db import get_db
-from app.models.models import User, Friend, Favorite
-from app.schemas.schemas import FriendResponse, FriendRequest, FriendRequestAction, UserSearchResponse
+from app.models.models import User, Friend, Favorite, UserBlock
+from app.schemas.schemas import FriendResponse, FriendRequest, FriendRequestAction, UserSearchResponse, UserBlockResponse, UserResponse
 from app.middleware.auth import get_current_user
 from app.services.notification_service import NotificationService
 
@@ -366,4 +366,82 @@ def remove_friend_by_id(
     db.delete(friendship)
     db.commit()
     return {"message": "Friend removed successfully"}
+
+
+@router.post("/user/block/{user_id}", status_code=status.HTTP_201_CREATED)
+def block_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot block yourself")
+        
+    # Check if user exists
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    # Check if already blocked
+    existing = db.query(UserBlock).filter(
+        UserBlock.blocker_id == current_user.id,
+        UserBlock.blocked_id == user_id
+    ).first()
+    if existing:
+        return {"message": "User is already blocked"}
+        
+    new_block = UserBlock(blocker_id=current_user.id, blocked_id=user_id)
+    db.add(new_block)
+    
+    # Proactively remove friendship if any
+    friendship = db.query(Friend).filter(
+        or_(
+            and_(Friend.user_id == current_user.id, Friend.friend_id == user_id),
+            and_(Friend.user_id == user_id, Friend.friend_id == current_user.id)
+        )
+    ).first()
+    if friendship:
+        db.delete(friendship)
+        
+    db.commit()
+    return {"message": "User blocked successfully"}
+
+
+@router.post("/user/unblock/{user_id}")
+def unblock_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    block = db.query(UserBlock).filter(
+        UserBlock.blocker_id == current_user.id,
+        UserBlock.blocked_id == user_id
+    ).first()
+    
+    if not block:
+        raise HTTPException(status_code=404, detail="Block entry not found")
+        
+    db.delete(block)
+    db.commit()
+    return {"message": "User unblocked successfully"}
+
+
+@router.get("/user/blocks", response_model=List[UserBlockResponse])
+def get_blocked_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    blocks = db.query(UserBlock).filter(UserBlock.blocker_id == current_user.id).all()
+    results = []
+    for b in blocks:
+        blocked_user = db.query(User).filter(User.id == b.blocked_id).first()
+        if blocked_user:
+            results.append(UserBlockResponse(
+                id=b.id,
+                blocker_id=b.blocker_id,
+                blocked_id=b.blocked_id,
+                blocked_user=UserResponse.model_validate(blocked_user),
+                created_at=b.created_at
+            ))
+    return results
 

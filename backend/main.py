@@ -104,6 +104,17 @@ try:
 
         except Exception:
             pass
+
+        # Add user1_id and user2_id to chat_rooms for direct messages
+        try:
+            conn.execute(text("ALTER TABLE chat_rooms ADD COLUMN user1_id INT DEFAULT NULL;"))
+            conn.execute(text("ALTER TABLE chat_rooms ADD COLUMN user2_id INT DEFAULT NULL;"))
+            conn.execute(text("ALTER TABLE chat_rooms ADD CONSTRAINT fk_chat_rooms_user1 FOREIGN KEY (user1_id) REFERENCES users(id) ON DELETE CASCADE;"))
+            conn.execute(text("ALTER TABLE chat_rooms ADD CONSTRAINT fk_chat_rooms_user2 FOREIGN KEY (user2_id) REFERENCES users(id) ON DELETE CASCADE;"))
+            conn.commit()
+            print("Migration: Added user1_id and user2_id to chat_rooms table.")
+        except Exception:
+            pass
 except Exception as e:
     print("Error synchronizing database tables, please verify MySQL connectivity:", e)
 

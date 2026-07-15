@@ -20,6 +20,44 @@ import api from "../../../services/api";
 import { SocketService } from "../../../services/socket";
 import { COLORS, SHADOWS, SPACING } from "../../../theme/theme";
 
+const capitalizeFirstLetter = (str?: string) => {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
+const getLastMessageContent = (lastMsg: any, currentUserId?: number) => {
+  if (!lastMsg) return "No messages yet. Send a greeting!";
+  const sender = lastMsg.sender_id === currentUserId 
+    ? "You" 
+    : capitalizeFirstLetter(lastMsg.sender_username);
+  
+  let body = "";
+  if (lastMsg.type === "shared_profile") {
+    body = "shared a profile";
+  } else if (lastMsg.type === "shared_game") {
+    body = "shared a game";
+  } else if (lastMsg.type === "shared_venue") {
+    body = "shared a venue";
+  } else if (lastMsg.type === "payment") {
+    body = "sent a payment request";
+  } else if (lastMsg.type === "poll") {
+    body = "created a poll";
+  } else if (lastMsg.type === "image") {
+    body = "sent an image";
+  } else {
+    let rawContent = lastMsg.content || "[attachment]";
+    if (lastMsg.type === "text" && rawContent.startsWith('{"is_reply":true')) {
+      try {
+        const parsed = JSON.parse(rawContent);
+        rawContent = parsed.text;
+      } catch (e) {}
+    }
+    body = rawContent;
+  }
+  
+  return `${sender}: ${body}`;
+};
+
 const parseUTCDate = (dateStr: string): Date => {
   if (!dateStr) return new Date();
   if (dateStr.endsWith("Z") || dateStr.includes("+") || /-\d{2}:\d{2}$/.test(dateStr)) {
@@ -71,6 +109,16 @@ export default function ChatListScreen() {
   }, []);
 
   const handleDeleteRoom = async (roomId: number) => {
+    const room = rooms.find((r: any) => r.id === roomId);
+    if (room && room.type === "game" && !isGameExpired(room)) {
+      Alert.alert(
+        "Active Game Chat",
+        "This game is active, so the chat cannot be deleted. If you still want to delete the chat, you must leave the game first.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
     Alert.alert(
       "Delete Chat",
       "Are you sure you want to delete this chat? This will remove you from the game/squad.",
@@ -170,7 +218,9 @@ export default function ChatListScreen() {
           }
           renderItem={({ item }) => {
             const lastMsg = item.last_message;
-            const displayName = item.name || `Group Chat`;
+            const isDirect = item.type === "direct";
+            const displayName = isDirect ? capitalizeFirstLetter(item.name) : (item.name || `Group Chat`);
+            
             return (
               <Swipeable
                 renderRightActions={() => renderRightActions(item.id)}
@@ -181,9 +231,16 @@ export default function ChatListScreen() {
                   onPress={() => router.push(`/(tabs)/chat/${item.id}`)}
                 >
                   <View style={styles.avatarWrapper}>
-                    <View style={styles.iconAvatar}>
-                      <Ionicons name={getRoomIcon(item.type) as any} size={24} color={COLORS.primary} />
-                    </View>
+                    {isDirect ? (
+                      <Image 
+                        source={{ uri: item.other_user_profile_pic || "https://cdn-icons-png.flaticon.com/512/149/149071.png" }} 
+                        style={styles.profileAvatar}
+                      />
+                    ) : (
+                      <View style={styles.iconAvatar}>
+                        <Ionicons name={getRoomIcon(item.type) as any} size={24} color={COLORS.primary} />
+                      </View>
+                    )}
                     <View style={[styles.typeBadge, { backgroundColor: item.type === "game" ? COLORS.primary : COLORS.success }]} />
                   </View>
 
@@ -197,9 +254,7 @@ export default function ChatListScreen() {
                       )}
                     </View>
                     <Text style={styles.lastMsgText} numberOfLines={1}>
-                      {lastMsg 
-                        ? `${lastMsg.sender_username}: ${lastMsg.content || "[Image/Attachment]"}`
-                        : "No messages yet. Send a greeting!"}
+                      {getLastMessageContent(lastMsg, auth.user?.id)}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -287,6 +342,14 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     justifyContent: "center",
     alignItems: "center",
+    borderColor: COLORS.border,
+    borderWidth: 1,
+  },
+  profileAvatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: COLORS.background,
     borderColor: COLORS.border,
     borderWidth: 1,
   },

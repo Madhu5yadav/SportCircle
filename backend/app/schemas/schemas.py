@@ -288,6 +288,7 @@ class GameResponse(BaseModel):
     description: Optional[str] = None
     created_at: datetime
     joined_count: int
+    waiting_count: int = 0
     is_joined: Optional[bool] = False
     participants: List[ParticipantResponse] = []
 
@@ -388,6 +389,10 @@ class ChatRoomResponse(BaseModel):
     game_date: Optional[date] = None
     start_time: Optional[time] = None
     end_time: Optional[time] = None
+    other_user_id: Optional[int] = None
+    other_user_profile_pic: Optional[str] = None
+    blocked_by_me: Optional[bool] = False
+    has_blocked_me: Optional[bool] = False
 
     class Config:
         from_attributes = True
@@ -414,3 +419,14 @@ class NotificationResponse(BaseModel):
 
 class RateUserRequest(BaseModel):
     rating: int
+
+
+class UserBlockResponse(BaseModel):
+    id: int
+    blocker_id: int
+    blocked_id: int
+    blocked_user: UserResponse
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

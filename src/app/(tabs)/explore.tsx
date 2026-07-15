@@ -494,7 +494,14 @@ export default function ExploreScreen() {
                   <View style={styles.gameTitleRow}>
                     <Text style={styles.gameSportText}>{game.sport_type}</Text>
                     <Text style={styles.gameSeparator}>-</Text>
-                    <Text style={styles.gameSlotsText}>{game.joined_count}/{game.player_count}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Text style={styles.gameSlotsText}>{game.joined_count}/{game.player_count}</Text>
+                      {game.waiting_count > 0 && (
+                        <Text style={{ color: "#4CAF50", fontFamily: "Poppins_600SemiBold", fontSize: 11, marginLeft: 4 }}>
+                          ({game.waiting_count} waiting{game.waiting_count > 1 ? "s" : ""})
+                        </Text>
+                      )}
+                    </View>
                     <Ionicons name="people" size={16} color={COLORS.textPrimary} style={{ marginLeft: 4 }} />
                   </View>
                   
@@ -909,7 +916,7 @@ export default function ExploreScreen() {
                           <>
                             <View style={styles.detailsParticipantsSection}>
                               <Text style={styles.detailsSectionTitle}>
-                                Participants ({joinedParts.length}/{selectedGame.player_count})
+                                Fixed Players ({joinedParts.length}/{selectedGame.player_count})
                               </Text>
                               
                               {joinedParts.length > 0 ? (
@@ -938,7 +945,7 @@ export default function ExploreScreen() {
                             {waitingParts.length > 0 && (
                               <View style={[styles.detailsParticipantsSection, { marginTop: 15 }]}>
                                 <Text style={[styles.detailsSectionTitle, { color: "#FB8C00" }]}>
-                                  Waiting List ({waitingParts.length})
+                                  Waiting List Players ({waitingParts.length})
                                 </Text>
                                 
                                 <ScrollView 

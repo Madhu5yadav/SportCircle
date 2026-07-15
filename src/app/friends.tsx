@@ -426,29 +426,45 @@ export default function FriendsScreen() {
                   <Text style={styles.friendName}>@{friend.username}</Text>
                 </TouchableOpacity>
 
-                {squadStatus === "accepted" && (
-                  <View style={styles.inSquadBadge}>
-                    <Text style={styles.inSquadText}>In Squad</Text>
-                  </View>
-                )}
-
-                {squadStatus === "pending" && (
-                  <TouchableOpacity
-                    style={[styles.inSquadBadge, { backgroundColor: "#FFE0B2", borderWidth: 1, borderColor: "#FFB74D" }]}
-                    onPress={() => handleResendInvitationPrompt(friend.friend_id, friend.username)}
-                  >
-                    <Text style={[styles.inSquadText, { color: "#FB8C00" }]}>Pending</Text>
-                  </TouchableOpacity>
-                )}
-
-                {squadStatus === null && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <TouchableOpacity
                     style={styles.inviteIconBtn}
-                    onPress={() => handleInviteToSquad(friend.friend_id)}
+                    onPress={async () => {
+                      try {
+                        const roomRes = await api.post(`/chat/direct/${friend.friend_id}`);
+                        router.push(`/(tabs)/chat/${roomRes.data.id}`);
+                      } catch (err) {
+                        Alert.alert("Error", "Could not start chat");
+                      }
+                    }}
                   >
-                    <Ionicons name="add" size={22} color={COLORS.primary} />
+                    <Ionicons name="chatbubble-outline" size={18} color={COLORS.primary} />
                   </TouchableOpacity>
-                )}
+
+                  {squadStatus === "accepted" && (
+                    <View style={styles.inSquadBadge}>
+                      <Text style={styles.inSquadText}>In Squad</Text>
+                    </View>
+                  )}
+
+                  {squadStatus === "pending" && (
+                    <TouchableOpacity
+                      style={[styles.inSquadBadge, { backgroundColor: "#FFE0B2", borderWidth: 1, borderColor: "#FFB74D" }]}
+                      onPress={() => handleResendInvitationPrompt(friend.friend_id, friend.username)}
+                    >
+                      <Text style={[styles.inSquadText, { color: "#FB8C00" }]}>Pending</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {squadStatus === null && (
+                    <TouchableOpacity
+                      style={styles.inviteIconBtn}
+                      onPress={() => handleInviteToSquad(friend.friend_id)}
+                    >
+                      <Ionicons name="add" size={22} color={COLORS.primary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             );
           })}

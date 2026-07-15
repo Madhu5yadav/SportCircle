@@ -1,7 +1,7 @@
 import { io, Socket } from "socket.io-client";
 import { CONFIG } from "../constants/config";
 import { store } from "../redux/store";
-import { addMessage, setTyping, updatePaymentStatus, updatePollVote } from "../redux/chatSlice";
+import { addMessage, setTyping, updatePaymentStatus, updatePollVote, deleteMessage } from "../redux/chatSlice";
 import { updateGameSlots } from "../redux/gameSlice";
 import { addNotification, showToast } from "../redux/notificationSlice";
 
@@ -111,6 +111,35 @@ export const SocketService = {
           title: notif.title || "SportCircle",
           message: notif.message || "",
           type: notif.type || "system",
+        })
+      );
+    });
+
+    // Listen for message alerts
+    socket.on("new_message_alert", (alertData) => {
+      console.log("Real-time new message alert received:", alertData);
+      
+      const activeRoomId = store.getState().chat.activeRoomId;
+      if (activeRoomId === alertData.roomId) {
+        return; // Don't show popup if user is already inside this chat room
+      }
+
+      store.dispatch(
+        showToast({
+          title: alertData.title,
+          message: alertData.message,
+          type: "chat_message",
+        })
+      );
+    });
+
+    // Listen for message deletions
+    socket.on("message_deleted", (payload) => {
+      console.log("Real-time message deletion received:", payload);
+      store.dispatch(
+        deleteMessage({
+          roomId: payload.room_id,
+          messageId: payload.message_id,
         })
       );
     });

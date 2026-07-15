@@ -417,7 +417,7 @@ export default function HomeScreen() {
                     </View>
                     <View style={styles.upcomingGameMiddleRow}>
                       <Text style={styles.upcomingGameSport}>{g.sport_type}</Text>
-                      <Text style={styles.upcomingGameSlots}>{g.player_count - g.joined_count} Slots Left</Text>
+                      <Text style={styles.upcomingGameSlots}>{g.player_count - g.joined_count < 0 ? `Waiting List: ${g.joined_count - g.player_count}` : `${g.player_count - g.joined_count} Slots Left`}</Text>
                     </View>
                     <View style={styles.upcomingGameBottomRow}>
                       <Ionicons name="location-sharp" size={14} color={COLORS.textPrimary} />
@@ -452,7 +452,14 @@ export default function HomeScreen() {
                       <View style={styles.nearbyGameTopRow}>
                         <Text style={styles.nearbyGameSport}>{g.sport_type}</Text>
                         <Text style={styles.nearbyGameHyphen}>-</Text>
-                        <Text style={styles.nearbyGamePlayers}>{g.joined_count}/{g.player_count}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center" }}>
+                          <Text style={styles.nearbyGamePlayers}>{g.joined_count}/{g.player_count}</Text>
+                          {g.waiting_count > 0 && (
+                            <Text style={{ color: "#4CAF50", fontFamily: "Poppins_600SemiBold", fontSize: 11, marginLeft: 4 }}>
+                              ({g.waiting_count} waiting{g.waiting_count > 1 ? "s" : ""})
+                            </Text>
+                          )}
+                        </View>
                         <Ionicons name="people" size={16} color={COLORS.textPrimary} style={{ marginLeft: 4, marginRight: 'auto' }} />
                         <TouchableOpacity style={styles.joinBtn} onPress={() => router.push({ pathname: "/(tabs)/explore", params: { gameId: g.id } })}>
                           <Text style={styles.joinBtnText}>Join</Text>

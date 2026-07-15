@@ -140,7 +140,8 @@ def list_games(
                 continue
                 
         # Populate dynamic counts and user states
-        joined_count = db.query(Participant).filter(Participant.game_id == g.id).count()
+        joined_count = db.query(Participant).filter(Participant.game_id == g.id, Participant.status == "joined").count()
+        waiting_count = db.query(Participant).filter(Participant.game_id == g.id, Participant.status == "waiting").count()
         is_joined = db.query(Participant).filter(
             Participant.game_id == g.id, 
             Participant.user_id == current_user.id
@@ -154,6 +155,7 @@ def list_games(
                 user_id=p.user.id,
                 username=p.user.username,
                 profile_pic=p.user.profile_pic,
+                status=p.status,
                 joined_at=p.joined_at
             ))
             
@@ -178,6 +180,7 @@ def list_games(
             description=g.description,
             created_at=g.created_at,
             joined_count=joined_count,
+            waiting_count=waiting_count,
             is_joined=is_joined,
             participants=parts_list
         )
@@ -243,6 +246,10 @@ async def join_game(
             SquadMember.status == "accepted",
             SquadMember.user_id != current_user.id
         ).all()
+        current_joined = db.query(Participant).filter(
+            Participant.game_id == id,
+            Participant.status == "joined"
+        ).count()
         for m in squad_members:
             # Check if this squad member is already a participant
             exists_m = db.query(Participant).filter(
@@ -250,13 +257,9 @@ async def join_game(
                 Participant.user_id == m.user_id
             ).first()
             if not exists_m:
-                # Count current joined participants
-                current_joined = db.query(Participant).filter(
-                    Participant.game_id == id,
-                    Participant.status == "joined"
-                ).count()
-                
                 m_status = "joined" if current_joined < game.player_count else "waiting"
+                if m_status == "joined":
+                    current_joined += 1
                 db_m_part = Participant(game_id=id, user_id=m.user_id, status=m_status)
                 db.add(db_m_part)
         db.commit()
@@ -499,7 +502,8 @@ def get_game_details(game_id: int, user: User, db: Session) -> Optional[GameResp
     if not g:
         return None
         
-    joined_count = db.query(Participant).filter(Participant.game_id == g.id).count()
+    joined_count = db.query(Participant).filter(Participant.game_id == g.id, Participant.status == "joined").count()
+    waiting_count = db.query(Participant).filter(Participant.game_id == g.id, Participant.status == "waiting").count()
     is_joined = db.query(Participant).filter(
         Participant.game_id == g.id, 
         Participant.user_id == user.id
@@ -513,6 +517,7 @@ def get_game_details(game_id: int, user: User, db: Session) -> Optional[GameResp
             user_id=p.user.id,
             username=p.user.username,
             profile_pic=p.user.profile_pic,
+            status=p.status,
             joined_at=p.joined_at
         ))
         
@@ -537,6 +542,7 @@ def get_game_details(game_id: int, user: User, db: Session) -> Optional[GameResp
         description=g.description,
         created_at=g.created_at,
         joined_count=joined_count,
+        waiting_count=waiting_count,
         is_joined=is_joined,
         participants=parts_list
     )
@@ -554,13 +560,15 @@ def get_my_joined_games(
     
     filtered_games = []
     for g in games:
-        joined_count = db.query(Participant).filter(Participant.game_id == g.id).count()
+        joined_count = db.query(Participant).filter(Participant.game_id == g.id, Participant.status == "joined").count()
+        waiting_count = db.query(Participant).filter(Participant.game_id == g.id, Participant.status == "waiting").count()
         parts_list = []
         for p in g.participants:
             parts_list.append(ParticipantResponse(
                 user_id=p.user.id,
                 username=p.user.username,
                 profile_pic=p.user.profile_pic,
+                status=p.status,
                 joined_at=p.joined_at
             ))
             
@@ -585,6 +593,7 @@ def get_my_joined_games(
             description=g.description,
             created_at=g.created_at,
             joined_count=joined_count,
+            waiting_count=waiting_count,
             is_joined=True,
             participants=parts_list
         )

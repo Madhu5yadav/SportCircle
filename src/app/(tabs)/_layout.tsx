@@ -80,10 +80,10 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="chat/index"
+        name="chat"
         options={{
           title: "Chat",
-          headerTitle: "My Group Chats",
+          headerShown: false,
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? "chatbubbles" : "chatbubbles-outline"}
@@ -91,15 +91,6 @@ export default function TabsLayout() {
               color={color}
             />
           ),
-        }}
-      />
-      {/* Hide dynamic chat room from bottom tab navigation */}
-      <Tabs.Screen
-        name="chat/[roomId]"
-        options={{
-          href: null,
-          tabBarStyle: { display: "none" },
-          headerShown: false,
         }}
       />
       <Tabs.Screen

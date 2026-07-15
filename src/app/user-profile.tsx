@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS, SPACING, SHADOWS, TYPOGRAPHY } from "../theme/theme";
 import api from "../services/api";
+import ShareModal from "../components/ShareModal";
 
 interface PublicUser {
   id: number;
@@ -50,6 +51,7 @@ export default function UserProfileScreen() {
   const [squads, setSquads] = useState<any[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
   const [showRateModal, setShowRateModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [tempRating, setTempRating] = useState(0);
   const [submittingRating, setSubmittingRating] = useState(false);
 
@@ -219,7 +221,9 @@ export default function UserProfileScreen() {
           <Ionicons name="arrow-back" size={24} color={COLORS.surface} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>@{user.username}</Text>
-        <View style={{ width: 24 }} />
+        <TouchableOpacity style={styles.shareBtn} onPress={() => setShowShareModal(true)}>
+          <Ionicons name="share-outline" size={24} color={COLORS.surface} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -370,6 +374,16 @@ export default function UserProfileScreen() {
             </View>
           </TouchableOpacity>
         </Modal>
+
+        <ShareModal
+          isVisible={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          shareData={{
+            type: 'profile',
+            id: targetUserId,
+            title: fullName || `@${user.username}`
+          }}
+        />
 
         {/* 4. Preferred Sports Section */}
         <View style={styles.sectionContainer}>
