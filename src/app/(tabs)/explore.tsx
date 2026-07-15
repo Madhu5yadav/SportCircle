@@ -498,7 +498,7 @@ export default function ExploreScreen() {
                       <Text style={styles.gameSlotsText}>{game.joined_count}/{game.player_count}</Text>
                       {(game.waiting_count ?? 0) > 0 && (
                         <Text style={{ color: "#4CAF50", fontFamily: "Poppins_600SemiBold", fontSize: 11, marginLeft: 4 }}>
-                          ({game.waiting_count} waiting{game.waiting_count > 1 ? "s" : ""})
+                          ({game.waiting_count} waiting{(game.waiting_count ?? 0) > 1 ? "s" : ""})
                         </Text>
                       )}
                     </View>

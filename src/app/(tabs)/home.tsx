@@ -456,7 +456,7 @@ export default function HomeScreen() {
                           <Text style={styles.nearbyGamePlayers}>{g.joined_count}/{g.player_count}</Text>
                           {(g.waiting_count ?? 0) > 0 && (
                             <Text style={{ color: "#4CAF50", fontFamily: "Poppins_600SemiBold", fontSize: 11, marginLeft: 4 }}>
-                              ({g.waiting_count} waiting{g.waiting_count > 1 ? "s" : ""})
+                              ({g.waiting_count} waiting{(g.waiting_count ?? 0) > 1 ? "s" : ""})
                             </Text>
                           )}
                         </View>
