@@ -12,6 +12,8 @@ interface UserProfile {
   longitude?: number;
   about?: string;
   profile_pic?: string;
+  trust_score?: number;
+  ratings_count?: number;
 }
 
 interface WalletState {

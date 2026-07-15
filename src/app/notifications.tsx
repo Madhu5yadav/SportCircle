@@ -10,11 +10,13 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  Vibration
 } from "react-native";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDispatch, useSelector } from "react-redux";
+import { createAudioPlayer } from "expo-audio";
 import {
   deleteNotification,
   markAllAsRead,
@@ -188,6 +190,19 @@ export default function NotificationsScreen() {
   };
 
   const handleNotificationPress = async (item: NotificationItem) => {
+    // Tactile vibration & soft click sound
+    try {
+      Vibration.vibrate(60); // 60ms subtle vibration
+      const player = createAudioPlayer(require("../../assets/sounds/tap.wav"));
+      player.play();
+      // Release resources after playback
+      setTimeout(() => {
+        player.release();
+      }, 3000);
+    } catch (e) {
+      console.log("Error playing tap sound/vibrating:", e);
+    }
+
     // Mark individual as read
     if (!item.is_read) {
       try {

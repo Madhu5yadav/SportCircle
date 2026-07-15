@@ -18,7 +18,8 @@ from app.controllers import (
     venue_controller,
     profile_controller,
     notification_controller,
-    chat_controller
+    chat_controller,
+    support_controller
 )
 
 # 1. Create database tables if they do not exist
@@ -136,6 +137,7 @@ app.include_router(venue_controller.router)
 app.include_router(profile_controller.router)
 app.include_router(notification_controller.router)
 app.include_router(chat_controller.router)
+app.include_router(support_controller.router)
 
 @app.get("/")
 def read_root():

@@ -4,6 +4,8 @@ import { store } from "../redux/store";
 import { addMessage, setTyping, updatePaymentStatus, updatePollVote } from "../redux/chatSlice";
 import { updateGameSlots } from "../redux/gameSlice";
 import { addNotification, showToast } from "../redux/notificationSlice";
+import { createAudioPlayer } from "expo-audio";
+import { Vibration } from "react-native";
 
 let socket: Socket | null = null;
 
@@ -90,8 +92,21 @@ export const SocketService = {
     });
 
     // Listen for notifications
-    socket.on("notification", (notif) => {
+    socket.on("notification", async (notif) => {
       console.log("Real-time notification received:", notif);
+
+      // Trigger sound and vibration
+      try {
+        Vibration.vibrate(150); // 150ms mild vibration
+        const player = createAudioPlayer(require("../../assets/sounds/notification.wav"));
+        player.play();
+        // Release resources after playback
+        setTimeout(() => {
+          player.release();
+        }, 3000);
+      } catch (err) {
+        console.log("Error playing notification sound or vibrating:", err);
+      }
 
       // Add to Redux notification list
       store.dispatch(
